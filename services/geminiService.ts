@@ -99,8 +99,8 @@ export async function generateStoryAndPrompts(
       config: {
         responseMimeType: "application/json",
         responseSchema: schema,
-        safetySettings,
       },
+      safetySettings,
     });
     
     const jsonText = response.text;
@@ -246,8 +246,8 @@ export async function generateAudioFromScript(script: string, voiceName: string)
                         prebuiltVoiceConfig: { voiceName: voiceName },
                     },
                 },
-                safetySettings,
             },
+            safetySettings,
         });
 
         const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
@@ -294,20 +294,27 @@ export async function generateThumbnail(
                 outputMimeType: 'image/jpeg',
                 aspectRatio: '16:9',
             },
-            // Fix: Moved safetySettings outside of the config object as it is a top-level property.
             safetySettings,
         });
 
-        if (!response.generatedImages || response.generatedImages.length === 0) {
-            console.error("Imagen API returned no images.", response);
+        const base64ImageBytes: string | undefined = response.generatedImages?.[0]?.image?.imageBytes;
+
+        if (!base64ImageBytes) {
+            console.error("Imagen API returned no image data.", response);
+            const blockReason = response.promptFeedback?.blockReason;
+            if (blockReason) {
+                throw new Error(`Thumbnail generation was blocked due to ${blockReason}. Please adjust your prompt.`);
+            }
             throw new Error("The AI failed to generate a thumbnail image. Please try again.");
         }
-
-        const base64ImageBytes: string = response.generatedImages[0].image.imageBytes;
+        
         return `data:image/jpeg;base64,${base64ImageBytes}`;
 
     } catch (error) {
-        console.error("Error calling Imagen API for thumbnail:", error);
+        console.error("Error calling Gemini API for thumbnail:", error);
+        if (error instanceof Error && error.message.startsWith('Thumbnail generation was blocked')) {
+            throw error;
+        }
         throw new Error("Failed to generate thumbnail from the AI. Please try again.");
     }
 }
