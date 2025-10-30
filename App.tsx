@@ -131,8 +131,12 @@ const App: React.FC = () => {
       setGeneratedResult(prev => prev ? { ...prev, thumbnailImage: thumbnailB64 } : null);
     } catch (e) {
       console.error(e);
-      const errorMessage = e instanceof Error ? e.message : 'Please try again.';
-      setError(`An error occurred while generating the thumbnail. ${errorMessage}`);
+      if (e instanceof Error && e.message.includes('Requested entity was not found.')) {
+        setError('Your API key was not found or is invalid. Please select a valid key and try again. (Error: Requested entity was not found.)');
+      } else {
+        const errorMessage = e instanceof Error ? e.message : 'Please try again.';
+        setError(`An error occurred while generating the thumbnail. ${errorMessage}`);
+      }
     } finally {
       setIsThumbnailLoading(false);
     }

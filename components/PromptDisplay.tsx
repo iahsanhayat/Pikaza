@@ -2,6 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { CopyIcon, CheckIcon, SparklesIcon, DownloadIcon, PhotoIcon, LoadingSpinnerIcon } from './icons';
 import type { GeneratedResult } from '../types';
 
+// Augment the window object with the aistudio property
+// FIX: Defined AIStudio interface to resolve TypeScript error about subsequent property declarations.
+declare global {
+    interface AIStudio {
+        hasSelectedApiKey: () => Promise<boolean>;
+        openSelectKey: () => Promise<void>;
+    }
+    interface Window {
+        aistudio?: AIStudio;
+    }
+}
+
 interface PromptDisplayProps {
   result: GeneratedResult | null;
   isLoading: boolean;
@@ -46,6 +58,23 @@ const renderMarkdown = (markdown: string) => {
 
 export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading, error, isThumbnailLoading, onGenerateThumbnail }) => {
   const [isCopied, setIsCopied] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
+
+  useEffect(() => {
+    const checkKey = async () => {
+      if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
+        const keySelected = await window.aistudio.hasSelectedApiKey();
+        setHasApiKey(keySelected);
+      }
+    };
+    checkKey();
+  }, []);
+
+  useEffect(() => {
+    if (error && error.includes('Requested entity was not found.')) {
+      setHasApiKey(false);
+    }
+  }, [error]);
 
   useEffect(() => {
     if (isCopied) {
@@ -118,6 +147,28 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
         document.body.removeChild(link);
     }
   }
+  
+  const handleGenerateThumbnailClick = async () => {
+    let keyIsSelected = hasApiKey;
+    if (!keyIsSelected) {
+      if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
+        await window.aistudio.openSelectKey();
+        // Assume success after dialog closes, as per guidelines to handle race conditions
+        keyIsSelected = true;
+        setHasApiKey(true);
+      } else {
+          // Fallback or error for environments where aistudio is not available
+          console.error("API Key selection mechanism is not available.");
+          return;
+      }
+    }
+    
+    // Proceed with generation only if a key is now considered selected
+    if (keyIsSelected) {
+      onGenerateThumbnail();
+    }
+  };
+
 
   const renderContent = () => {
     if (isLoading) {
@@ -191,14 +242,19 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                             </div>
                         ) : (
                             <div className="text-center p-4">
-                                <p className="text-text-medium mb-4">Generate a high-quality thumbnail for your video based on the story and characters.</p>
+                                {!hasApiKey && (
+                                    <p className="text-text-medium mb-4 text-sm">
+                                        To use your personal quota for thumbnail generation, please select your Gemini API key.
+                                        <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-accent-pink underline ml-1">Learn about billing.</a>
+                                    </p>
+                                )}
                                 <button
                                     type="button"
-                                    onClick={onGenerateThumbnail}
+                                    onClick={handleGenerateThumbnailClick}
                                     disabled={isThumbnailLoading}
                                     className="flex items-center justify-center mx-auto gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
-                                    <PhotoIcon className="w-5 h-5" /> Generate Thumbnail
+                                    <PhotoIcon className="w-5 h-5" /> {hasApiKey ? 'Generate Thumbnail' : 'Select API Key & Generate'}
                                 </button>
                             </div>
                         )}

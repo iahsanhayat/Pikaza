@@ -1,8 +1,8 @@
 import { GoogleGenAI, Type, GenerateContentResponse, HarmCategory, HarmBlockThreshold, Modality } from "@google/genai";
 import type { CharacterProfile } from '../types';
 
-// Fix: Use process.env.API_KEY as per the guidelines.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// This global instance is used for operations not requiring user-specific API keys.
+const aiGlobal = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const safetySettings = [
   {
@@ -35,6 +35,9 @@ function handleApiError(error: unknown, context: string): Error {
         // The API error message might already be user-friendly.
         if (error.message.includes('API key not valid')) {
             return new Error('The provided API key is not valid. Please check your credentials.');
+        }
+        if (error.message.includes('Requested entity was not found.')) {
+            return new Error('Requested entity was not found.');
         }
         return new Error(`Failed during ${context}: ${error.message}`);
     }
@@ -111,7 +114,7 @@ export async function generateStoryAndPrompts(
   `;
 
   try {
-    const response: GenerateContentResponse = await ai.models.generateContent({
+    const response: GenerateContentResponse = await aiGlobal.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: masterPrompt,
       config: {
@@ -168,7 +171,7 @@ export async function generateVoiceoverScript(storyScript: string, targetCharact
   `;
 
   try {
-    const response: GenerateContentResponse = await ai.models.generateContent({
+    const response: GenerateContentResponse = await aiGlobal.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
@@ -211,7 +214,7 @@ export async function enhanceVoiceoverScript(script: string): Promise<string> {
   `;
 
   try {
-    const response: GenerateContentResponse = await ai.models.generateContent({
+    const response: GenerateContentResponse = await aiGlobal.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
@@ -237,7 +240,7 @@ export async function enhanceVoiceoverScript(script: string): Promise<string> {
 
 export async function generateAudioFromScript(script: string, voiceName: string): Promise<string> {
     try {
-        const response = await ai.models.generateContent({
+        const response = await aiGlobal.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
             contents: [{ parts: [{ text: script }] }],
             config: {
@@ -268,6 +271,9 @@ export async function generateAudioFromScript(script: string, voiceName: string)
 }
 
 export async function generateThumbnail(characterSheet: string, storyScript: string | undefined, videoStyle: string): Promise<string> {
+    // Create a new instance right before the call to ensure it uses the user-selected API key.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
     const promptGenerationPrompt = `
         Based on the following character sheet and story, create a single, highly detailed, and visually captivating prompt for an AI image generator to create a YouTube video thumbnail.
 
