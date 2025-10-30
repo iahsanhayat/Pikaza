@@ -270,18 +270,15 @@ export async function generateAudioFromScript(script: string, voiceName: string)
     }
 }
 
-export async function generateThumbnail(characterSheet: string, storyScript: string | undefined, videoStyle: string): Promise<string> {
-    // Create a new instance right before the call to ensure it uses the user-selected API key.
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
-    const promptGenerationPrompt = `
+export async function generateThumbnailPrompt(characterSheet: string, storyScript: string | undefined, videoStyle: string): Promise<string> {
+    const prompt = `
         Based on the following character sheet and story, create a single, highly detailed, and visually captivating prompt for an AI image generator to create a YouTube video thumbnail.
 
         **Instructions for the Prompt:**
-        1.  **Style:** The style MUST be: "${videoStyle}".
-        2.  **Focus:** The thumbnail must feature the main character(s) prominently in a dynamic or emotionally resonant pose.
-        3.  **Composition:** Describe a compelling scene that captures the essence of the story. Use strong keywords for composition, lighting, and mood (e.g., "dramatic lighting," "cinematic composition," "action shot," "intense close-up").
-        4.  **Clarity:** Be extremely descriptive to ensure the generated image is high-quality and detailed.
+        1.  **Style:** The prompt MUST begin with the specified style: "${videoStyle}".
+        2.  **Character Consistency:** For any character mentioned, you MUST incorporate their specific, detailed appearance from the character sheet to ensure consistency.
+        3.  **Focus & Composition:** The thumbnail must feature the main character(s) prominently in a dynamic or emotionally resonant pose. Describe a compelling scene that captures the essence of the story. Use strong keywords for composition, lighting, and mood (e.g., "dramatic lighting," "cinematic composition," "action shot," "intense close-up", "rule of thirds").
+        4.  **Clarity & Detail:** Be extremely descriptive about every element: the characters' expressions, clothing textures, background details, weather, time of day, and overall atmosphere. The goal is to leave no room for ambiguity for the AI image generator.
         5.  **Aspect Ratio:** The prompt MUST end with "--ar 16:9" to ensure the correct thumbnail dimensions.
         6.  **Output:** Your entire output should be ONLY the final image prompt text, with no extra explanations, labels, or quotation marks.
 
@@ -299,64 +296,25 @@ export async function generateThumbnail(characterSheet: string, storyScript: str
     `;
 
     try {
-        // Step 1: Generate the perfect prompt for the thumbnail
-        const promptResponse = await ai.models.generateContent({
+        const response = await aiGlobal.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: promptGenerationPrompt,
+            contents: prompt,
             config: {
                 safetySettings: safetySettings,
             },
         });
 
-        const imagePrompt = promptResponse.text;
-        if (!imagePrompt?.trim()) {
-            const blockReason = promptResponse.promptFeedback?.blockReason;
+        const thumbnailPrompt = response.text;
+        if (!thumbnailPrompt?.trim()) {
+            const blockReason = response.promptFeedback?.blockReason;
             if (blockReason) {
                 throw new Error(`Thumbnail prompt generation was blocked due to ${blockReason}.`);
             }
             throw new Error("Failed to generate a thumbnail prompt.");
         }
 
-        // Step 2: Generate the image using the created prompt with gemini-2.5-flash-image
-        const imageResponse = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: {
-                parts: [
-                    {
-                        text: imagePrompt.trim(),
-                    },
-                ],
-            },
-            config: {
-                responseModalities: [Modality.IMAGE],
-                safetySettings: safetySettings,
-            },
-        });
-
-        let base64ImageBytes: string | undefined;
-        let mimeType: string | undefined;
-
-        if (imageResponse.candidates && imageResponse.candidates.length > 0) {
-            for (const part of imageResponse.candidates[0].content.parts) {
-                if (part.inlineData) {
-                    base64ImageBytes = part.inlineData.data;
-                    mimeType = part.inlineData.mimeType;
-                    break;
-                }
-            }
-        }
-
-        if (!base64ImageBytes || !mimeType) {
-            const blockReason = imageResponse.promptFeedback?.blockReason;
-            if (blockReason) {
-                throw new Error(`Thumbnail image generation was blocked due to ${blockReason}.`);
-            }
-            throw new Error("The AI failed to generate a thumbnail image. The response did not contain image data.");
-        }
-
-        return `data:${mimeType};base64,${base64ImageBytes}`;
-
+        return thumbnailPrompt.trim();
     } catch (error) {
-        throw handleApiError(error, 'thumbnail generation');
+        throw handleApiError(error, 'thumbnail prompt generation');
     }
 }

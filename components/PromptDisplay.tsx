@@ -2,18 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { CopyIcon, CheckIcon, SparklesIcon, DownloadIcon, PhotoIcon, LoadingSpinnerIcon } from './icons';
 import type { GeneratedResult } from '../types';
 
-// Augment the window object with the aistudio property
-// FIX: Defined AIStudio interface to resolve TypeScript error about subsequent property declarations.
-declare global {
-    interface AIStudio {
-        hasSelectedApiKey: () => Promise<boolean>;
-        openSelectKey: () => Promise<void>;
-    }
-    interface Window {
-        aistudio?: AIStudio;
-    }
-}
-
 interface PromptDisplayProps {
   result: GeneratedResult | null;
   isLoading: boolean;
@@ -58,23 +46,7 @@ const renderMarkdown = (markdown: string) => {
 
 export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading, error, isThumbnailLoading, onGenerateThumbnail }) => {
   const [isCopied, setIsCopied] = useState(false);
-  const [hasApiKey, setHasApiKey] = useState(false);
-
-  useEffect(() => {
-    const checkKey = async () => {
-      if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
-        const keySelected = await window.aistudio.hasSelectedApiKey();
-        setHasApiKey(keySelected);
-      }
-    };
-    checkKey();
-  }, []);
-
-  useEffect(() => {
-    if (error && error.includes('Requested entity was not found.')) {
-      setHasApiKey(false);
-    }
-  }, [error]);
+  const [isThumbnailPromptCopied, setIsThumbnailPromptCopied] = useState(false);
 
   useEffect(() => {
     if (isCopied) {
@@ -83,11 +55,25 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
     }
   }, [isCopied]);
 
+  useEffect(() => {
+    if (isThumbnailPromptCopied) {
+      const timer = setTimeout(() => setIsThumbnailPromptCopied(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isThumbnailPromptCopied]);
+
   const handleCopy = () => {
     if (result && result.prompts.length > 0) {
       const promptsText = result.prompts.join('\n');
       navigator.clipboard.writeText(promptsText);
       setIsCopied(true);
+    }
+  };
+
+  const handleCopyThumbnailPrompt = () => {
+    if (result?.thumbnailPrompt) {
+        navigator.clipboard.writeText(result.thumbnailPrompt);
+        setIsThumbnailPromptCopied(true);
     }
   };
 
@@ -133,43 +119,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
         URL.revokeObjectURL(url);
     }
   }
-
-  const handleDownloadThumbnail = () => {
-    if (result?.thumbnailImage) {
-        const link = document.createElement('a');
-        link.href = result.thumbnailImage;
-        const mimeTypeMatch = result.thumbnailImage.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+).*,.*/);
-        const mimeType = mimeTypeMatch && mimeTypeMatch.length > 1 ? mimeTypeMatch[1] : 'image/jpeg';
-        const extension = mimeType.split('/')[1] || 'jpeg';
-        link.download = `thumbnail.${extension}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-  }
   
-  const handleGenerateThumbnailClick = async () => {
-    let keyIsSelected = hasApiKey;
-    if (!keyIsSelected) {
-      if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
-        await window.aistudio.openSelectKey();
-        // Assume success after dialog closes, as per guidelines to handle race conditions
-        keyIsSelected = true;
-        setHasApiKey(true);
-      } else {
-          // Fallback or error for environments where aistudio is not available
-          console.error("API Key selection mechanism is not available.");
-          return;
-      }
-    }
-    
-    // Proceed with generation only if a key is now considered selected
-    if (keyIsSelected) {
-      onGenerateThumbnail();
-    }
-  };
-
-
   const renderContent = () => {
     if (isLoading) {
       return <LoadingSkeleton />;
@@ -220,41 +170,36 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
             
             {result.characterSheet && (
                  <div>
-                    <h2 className="text-2xl font-display font-bold text-text-light">Video Thumbnail</h2>
+                    <h2 className="text-2xl font-display font-bold text-text-light">Thumbnail Prompt</h2>
                     <div className="p-6 bg-dark-input rounded-2xl shadow-soft-inset mt-4">
                         {isThumbnailLoading ? (
-                            <div className="aspect-video bg-dark-bg rounded-lg flex items-center justify-center">
+                            <div className="flex items-center justify-center text-text-medium">
                                 <LoadingSpinnerIcon />
-                                <span className="ml-2">Generating your thumbnail...</span>
+                                <span className="ml-2">Generating prompt...</span>
                             </div>
-                        ) : result.thumbnailImage ? (
+                        ) : result.thumbnailPrompt ? (
                             <div className="relative group">
-                                <img src={result.thumbnailImage} alt="Generated Thumbnail" className="w-full h-auto rounded-lg" />
-                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
-                                    <button 
-                                        onClick={handleDownloadThumbnail}
-                                        className="flex items-center gap-2 py-2 px-4 rounded-lg text-sm font-semibold text-text-light bg-black/60 backdrop-blur-sm hover:bg-accent-pink transition-colors"
-                                        aria-label="Download thumbnail"
-                                    >
-                                        <DownloadIcon className="w-5 h-5" /> Download
-                                    </button>
-                                </div>
+                                <pre className="whitespace-pre-wrap bg-dark-bg p-4 rounded-lg text-sm font-mono text-text-light">
+                                    {result.thumbnailPrompt}
+                                </pre>
+                                <button
+                                    onClick={handleCopyThumbnailPrompt}
+                                    className="absolute top-2 right-2 p-2 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent-pink transition opacity-0 group-hover:opacity-100"
+                                    aria-label="Copy thumbnail prompt"
+                                    title="Copy prompt"
+                                >
+                                    {isThumbnailPromptCopied ? <CheckIcon className="w-5 h-5 text-green-400" /> : <CopyIcon className="w-5 h-5" />}
+                                </button>
                             </div>
                         ) : (
                             <div className="text-center p-4">
-                                {!hasApiKey && (
-                                    <p className="text-text-medium mb-4 text-sm">
-                                        To use your personal quota for thumbnail generation, please select your Gemini API key.
-                                        <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-accent-pink underline ml-1">Learn about billing.</a>
-                                    </p>
-                                )}
                                 <button
                                     type="button"
-                                    onClick={handleGenerateThumbnailClick}
+                                    onClick={onGenerateThumbnail}
                                     disabled={isThumbnailLoading}
                                     className="flex items-center justify-center mx-auto gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
-                                    <PhotoIcon className="w-5 h-5" /> {hasApiKey ? 'Generate Thumbnail' : 'Select API Key & Generate'}
+                                    <PhotoIcon className="w-5 h-5" /> Generate Thumbnail Prompt
                                 </button>
                             </div>
                         )}

@@ -1,12 +1,10 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import type { CharacterProfile, GeneratedResult } from './types';
 import { CharacterInputForm } from './components/CharacterInputForm';
 import { PromptDisplay } from './components/PromptDisplay';
-import { LoginPage } from './components/LoginPage';
-import { generateStoryAndPrompts, generateVoiceoverScript, generateAudioFromScript, enhanceVoiceoverScript, generateThumbnail } from './services/geminiService';
+import { generateStoryAndPrompts, generateVoiceoverScript, generateAudioFromScript, enhanceVoiceoverScript, generateThumbnailPrompt } from './services/geminiService';
 
 const App: React.FC = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [characterProfiles, setCharacterProfiles] = useState<CharacterProfile[]>([{
     name: '',
     appearance: '',
@@ -26,19 +24,6 @@ const App: React.FC = () => {
   const [isAudioLoading, setIsAudioLoading] = useState<boolean>(false);
   const [isThumbnailLoading, setIsThumbnailLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const loggedInStatus = sessionStorage.getItem('isLoggedIn');
-    if (loggedInStatus === 'true') {
-      setIsLoggedIn(true);
-    }
-  }, []);
-
-  const handleLogin = () => {
-    sessionStorage.setItem('isLoggedIn', 'true');
-    setIsLoggedIn(true);
-  };
-
 
   const handleGenerate = useCallback(async () => {
     setIsLoading(true);
@@ -138,28 +123,19 @@ const App: React.FC = () => {
     setIsThumbnailLoading(true);
     setError(null);
     try {
-      const thumbnailB64 = await generateThumbnail(
+      const thumbnailPrompt = await generateThumbnailPrompt(
         generatedResult.characterSheet, 
         generatedResult.storyScript,
         videoStyle
       );
-      setGeneratedResult(prev => prev ? { ...prev, thumbnailImage: thumbnailB64 } : null);
+      setGeneratedResult(prev => prev ? { ...prev, thumbnailPrompt } : null);
     } catch (e) {
-      console.error(e);
-      if (e instanceof Error && e.message.includes('Requested entity was not found.')) {
-        setError('Your API key was not found or is invalid. Please select a valid key and try again. (Error: Requested entity was not found.)');
-      } else {
         const errorMessage = e instanceof Error ? e.message : 'Please try again.';
-        setError(`An error occurred while generating the thumbnail. ${errorMessage}`);
-      }
+        setError(`An error occurred while generating the thumbnail prompt. ${errorMessage}`);
     } finally {
       setIsThumbnailLoading(false);
     }
   }, [generatedResult, videoStyle]);
-
-  if (!isLoggedIn) {
-    return <LoginPage onLogin={handleLogin} />;
-  }
 
   return (
     <div className="min-h-screen bg-dark-bg text-text-light flex flex-col">

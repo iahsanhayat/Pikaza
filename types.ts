@@ -9,5 +9,5 @@ export interface GeneratedResult {
   prompts: string[];
   voiceover?: string;
   voiceoverAudio?: string;
-  thumbnailImage?: string;
+  thumbnailPrompt?: string;
 }
