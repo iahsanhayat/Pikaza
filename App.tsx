@@ -1,10 +1,12 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import type { CharacterProfile, GeneratedResult } from './types';
 import { CharacterInputForm } from './components/CharacterInputForm';
 import { PromptDisplay } from './components/PromptDisplay';
+import { LoginPage } from './components/LoginPage';
 import { generateStoryAndPrompts, generateVoiceoverScript, generateAudioFromScript, enhanceVoiceoverScript, generateThumbnail } from './services/geminiService';
 
 const App: React.FC = () => {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [characterProfiles, setCharacterProfiles] = useState<CharacterProfile[]>([{
     name: '',
     appearance: '',
@@ -24,6 +26,19 @@ const App: React.FC = () => {
   const [isAudioLoading, setIsAudioLoading] = useState<boolean>(false);
   const [isThumbnailLoading, setIsThumbnailLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loggedInStatus = sessionStorage.getItem('isLoggedIn');
+    if (loggedInStatus === 'true') {
+      setIsLoggedIn(true);
+    }
+  }, []);
+
+  const handleLogin = () => {
+    sessionStorage.setItem('isLoggedIn', 'true');
+    setIsLoggedIn(true);
+  };
+
 
   const handleGenerate = useCallback(async () => {
     setIsLoading(true);
@@ -141,6 +156,10 @@ const App: React.FC = () => {
       setIsThumbnailLoading(false);
     }
   }, [generatedResult, videoStyle]);
+
+  if (!isLoggedIn) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
 
   return (
     <div className="min-h-screen bg-dark-bg text-text-light flex flex-col">
