@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import type { CharacterProfile, GeneratedResult } from './types';
 import { CharacterInputForm } from './components/CharacterInputForm';
 import { PromptDisplay } from './components/PromptDisplay';
-import { generateStoryAndPrompts, generateVoiceoverScript, generateAudioFromScript, enhanceVoiceoverScript } from './services/geminiService';
+import { generateStoryAndPrompts, generateVoiceoverScript, generateAudioFromScript, enhanceVoiceoverScript, generateThumbnail } from './services/geminiService';
 
 const App: React.FC = () => {
   const [characterProfiles, setCharacterProfiles] = useState<CharacterProfile[]>([{
@@ -22,6 +22,7 @@ const App: React.FC = () => {
   const [isVoiceoverLoading, setIsVoiceoverLoading] = useState<boolean>(false);
   const [isEnhancingScript, setIsEnhancingScript] = useState<boolean>(false);
   const [isAudioLoading, setIsAudioLoading] = useState<boolean>(false);
+  const [isThumbnailLoading, setIsThumbnailLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = useCallback(async () => {
@@ -116,6 +117,27 @@ const App: React.FC = () => {
     }
   }, [editableVoiceoverScript, selectedVoice]);
 
+  const handleGenerateThumbnail = useCallback(async () => {
+    if (!generatedResult?.characterSheet) return;
+  
+    setIsThumbnailLoading(true);
+    setError(null);
+    try {
+      const thumbnailB64 = await generateThumbnail(
+        generatedResult.characterSheet, 
+        generatedResult.storyScript,
+        videoStyle
+      );
+      setGeneratedResult(prev => prev ? { ...prev, thumbnailImage: thumbnailB64 } : null);
+    } catch (e) {
+      console.error(e);
+      const errorMessage = e instanceof Error ? e.message : 'Please try again.';
+      setError(`An error occurred while generating the thumbnail. ${errorMessage}`);
+    } finally {
+      setIsThumbnailLoading(false);
+    }
+  }, [generatedResult, videoStyle]);
+
   return (
     <div className="min-h-screen bg-dark-bg text-text-light flex flex-col">
       <header className="py-6 px-6 md:px-8">
@@ -157,6 +179,8 @@ const App: React.FC = () => {
           result={generatedResult}
           isLoading={isLoading}
           error={error}
+          isThumbnailLoading={isThumbnailLoading}
+          onGenerateThumbnail={handleGenerateThumbnail}
         />
       </main>
     </div>

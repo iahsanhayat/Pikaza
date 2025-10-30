@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { CopyIcon, CheckIcon, SparklesIcon, DownloadIcon } from './icons';
+import { CopyIcon, CheckIcon, SparklesIcon, DownloadIcon, PhotoIcon, LoadingSpinnerIcon } from './icons';
 import type { GeneratedResult } from '../types';
 
 interface PromptDisplayProps {
   result: GeneratedResult | null;
   isLoading: boolean;
   error: string | null;
+  isThumbnailLoading: boolean;
+  onGenerateThumbnail: () => void;
 }
 
 const LoadingSkeleton: React.FC = () => (
@@ -42,7 +44,7 @@ const renderMarkdown = (markdown: string) => {
     return <div dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading, error }) => {
+export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading, error, isThumbnailLoading, onGenerateThumbnail }) => {
   const [isCopied, setIsCopied] = useState(false);
 
   useEffect(() => {
@@ -103,6 +105,17 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
     }
   }
 
+  const handleDownloadThumbnail = () => {
+    if (result?.thumbnailImage) {
+        const link = document.createElement('a');
+        link.href = `data:image/jpeg;base64,${result.thumbnailImage}`;
+        link.download = 'thumbnail.jpeg';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+  }
+
   const renderContent = () => {
     if (isLoading) {
       return <LoadingSkeleton />;
@@ -151,6 +164,45 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                 </div>
             )}
             
+            {result.characterSheet && (
+                 <div>
+                    <h2 className="text-2xl font-display font-bold text-text-light">Video Thumbnail</h2>
+                    <div className="p-6 bg-dark-input rounded-2xl shadow-soft-inset mt-4">
+                        {isThumbnailLoading ? (
+                            <div className="aspect-video bg-dark-bg rounded-lg flex items-center justify-center">
+                                <LoadingSpinnerIcon />
+                                <span className="ml-2">Generating your thumbnail...</span>
+                            </div>
+                        ) : result.thumbnailImage ? (
+                            <div className="relative group">
+                                <img src={`data:image/jpeg;base64,${result.thumbnailImage}`} alt="Generated Thumbnail" className="w-full h-auto rounded-lg" />
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                                    <button 
+                                        onClick={handleDownloadThumbnail}
+                                        className="flex items-center gap-2 py-2 px-4 rounded-lg text-sm font-semibold text-text-light bg-black/60 backdrop-blur-sm hover:bg-accent-pink transition-colors"
+                                        aria-label="Download thumbnail"
+                                    >
+                                        <DownloadIcon className="w-5 h-5" /> Download
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center p-4">
+                                <p className="text-text-medium mb-4">Generate a high-quality thumbnail for your video based on the story and characters.</p>
+                                <button
+                                    type="button"
+                                    onClick={onGenerateThumbnail}
+                                    disabled={isThumbnailLoading}
+                                    className="flex items-center justify-center mx-auto gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                >
+                                    <PhotoIcon className="w-5 h-5" /> Generate Thumbnail
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {result.prompts.length > 0 && (
                 <div>
                     <div className="flex justify-between items-center">

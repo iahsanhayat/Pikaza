@@ -32,16 +32,11 @@ const safetySettings = [
 function handleApiError(error: unknown, context: string): Error {
     console.error(`Error in ${context}:`, error);
     if (error instanceof Error) {
-        try {
-            // The API often returns a JSON string in the error message
-            const errorJson = JSON.parse(error.message);
-            const message = errorJson?.error?.message || 'An unexpected API error occurred.';
-            const status = errorJson?.error?.status;
-            return new Error(`Failed during ${context}: ${message}${status ? ` (Status: ${status})` : ''}`);
-        } catch (e) {
-            // Not a JSON error message, return the original message
-            return new Error(`Failed during ${context}: ${error.message}`);
+        // The API error message might already be user-friendly.
+        if (error.message.includes('API key not valid')) {
+            return new Error('The provided API key is not valid. Please check your credentials.');
         }
+        return new Error(`Failed during ${context}: ${error.message}`);
     }
     return new Error(`An unknown error occurred during ${context}.`);
 }
@@ -269,5 +264,72 @@ export async function generateAudioFromScript(script: string, voiceName: string)
         return base64Audio;
     } catch (error) {
         throw handleApiError(error, 'audio generation');
+    }
+}
+
+export async function generateThumbnail(characterSheet: string, storyScript: string | undefined, videoStyle: string): Promise<string> {
+    const promptGenerationPrompt = `
+        Based on the following character sheet and story, create a single, highly detailed, and visually captivating prompt for an AI image generator (Imagen) to create a YouTube video thumbnail in a 16:9 aspect ratio.
+
+        **Instructions for the Prompt:**
+        1.  **Style:** The style MUST be: "${videoStyle}".
+        2.  **Focus:** The thumbnail must feature the main character(s) prominently in a dynamic or emotionally resonant pose.
+        3.  **Composition:** Describe a compelling scene that captures the essence of the story. Use strong keywords for composition, lighting, and mood (e.g., "dramatic lighting," "cinematic composition," "action shot," "intense close-up").
+        4.  **Clarity:** Be extremely descriptive to ensure the generated image is high-quality and detailed.
+        5.  **Output:** Your entire output should be ONLY the final image prompt text, with no extra explanations, labels, or quotation marks.
+
+        **Character Sheet:**
+        ---
+        ${characterSheet}
+        ---
+
+        **Story:**
+        ---
+        ${storyScript || 'A story based on the character sheet.'}
+        ---
+
+        **Image Prompt:**
+    `;
+
+    try {
+        // Step 1: Generate the perfect prompt for the thumbnail
+        const promptResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: promptGenerationPrompt,
+            config: {
+                safetySettings: safetySettings,
+            },
+        });
+
+        const imagePrompt = promptResponse.text;
+        if (!imagePrompt?.trim()) {
+            const blockReason = promptResponse.promptFeedback?.blockReason;
+            if (blockReason) {
+                throw new Error(`Thumbnail prompt generation was blocked due to ${blockReason}.`);
+            }
+            throw new Error("Failed to generate a thumbnail prompt.");
+        }
+
+        // Step 2: Generate the image using the created prompt
+        const imageResponse = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: imagePrompt.trim(),
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/jpeg',
+                aspectRatio: '16:9',
+            },
+        });
+
+        const base64ImageBytes = imageResponse.generatedImages[0]?.image?.imageBytes;
+
+        if (!base64ImageBytes) {
+            throw new Error("The AI failed to generate a thumbnail image. The response may have been blocked for safety reasons.");
+        }
+
+        return base64ImageBytes;
+
+    } catch (error) {
+        throw handleApiError(error, 'thumbnail generation');
     }
 }
