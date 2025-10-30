@@ -108,9 +108,12 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
 
   const handleDownloadThumbnail = () => {
     if (result?.thumbnailImage) {
+        const mimeType = result.thumbnailImage.split(';')[0].split(':')[1];
+        const extension = mimeType.split('/')[1] || 'png';
+        
         const link = document.createElement('a');
         link.href = result.thumbnailImage;
-        link.download = 'pikaza_thumbnail.jpeg';
+        link.download = `pikaza_thumbnail.${extension}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

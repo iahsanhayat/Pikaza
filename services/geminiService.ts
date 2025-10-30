@@ -93,6 +93,7 @@ export async function generateStoryAndPrompts(
   `;
 
   try {
+    // FIX: Removed `safetySettings` as it's not a valid property for `generateContent`.
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: masterPrompt,
@@ -100,7 +101,6 @@ export async function generateStoryAndPrompts(
         responseMimeType: "application/json",
         responseSchema: schema,
       },
-      safetySettings,
     });
     
     const jsonText = response.text;
@@ -156,12 +156,10 @@ export async function generateVoiceoverScript(storyScript: string, targetCharact
   `;
 
   try {
+    // FIX: Removed `safetySettings` from `config` as it's not a valid property for `generateContent`.
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
-      config: {
-        safetySettings,
-      },
     });
     
     const text = response.text;
@@ -205,12 +203,10 @@ export async function enhanceVoiceoverScript(script: string): Promise<string> {
   `;
 
   try {
+    // FIX: Removed `safetySettings` from `config` as it's not a valid property for `generateContent`.
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
-      config: {
-        safetySettings,
-      },
     });
     
     const text = response.text;
@@ -236,6 +232,7 @@ export async function enhanceVoiceoverScript(script: string): Promise<string> {
 
 export async function generateAudioFromScript(script: string, voiceName: string): Promise<string> {
     try {
+        // FIX: Removed `safetySettings` as it's not a valid property for `generateContent`.
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
             contents: [{ parts: [{ text: script }] }],
@@ -247,7 +244,6 @@ export async function generateAudioFromScript(script: string, voiceName: string)
                     },
                 },
             },
-            safetySettings,
         });
 
         const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
@@ -274,7 +270,7 @@ export async function generateThumbnail(
     videoStyle: string
 ): Promise<string> {
     const prompt = `
-        Create a high-quality, cinematic, visually stunning YouTube video thumbnail in the style of: ${videoStyle}.
+        Generate a 16:9 aspect ratio, high-quality, cinematic, visually stunning YouTube video thumbnail in the style of: ${videoStyle}.
         The thumbnail must feature the character(s) described in the character sheet below, ensuring their appearance is perfectly consistent.
         ---
         **Character Sheet:**
@@ -286,21 +282,21 @@ export async function generateThumbnail(
     `;
 
     try {
-        const response = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
-            prompt: prompt,
-            config: {
-                numberOfImages: 1,
-                outputMimeType: 'image/jpeg',
-                aspectRatio: '16:9',
+        // FIX: Removed `safetySettings` as it's not a valid property for `generateContent`.
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: {
+                parts: [{ text: prompt }],
             },
-            safetySettings,
+            config: {
+                responseModalities: [Modality.IMAGE],
+            },
         });
 
-        const base64ImageBytes: string | undefined = response.generatedImages?.[0]?.image?.imageBytes;
+        const imagePart = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
 
-        if (!base64ImageBytes) {
-            console.error("Imagen API returned no image data.", response);
+        if (!imagePart || !imagePart.inlineData) {
+            console.error("Gemini API returned no image data for thumbnail.", response);
             const blockReason = response.promptFeedback?.blockReason;
             if (blockReason) {
                 throw new Error(`Thumbnail generation was blocked due to ${blockReason}. Please adjust your prompt.`);
@@ -308,7 +304,8 @@ export async function generateThumbnail(
             throw new Error("The AI failed to generate a thumbnail image. Please try again.");
         }
         
-        return `data:image/jpeg;base64,${base64ImageBytes}`;
+        const { mimeType, data } = imagePart.inlineData;
+        return `data:${mimeType};base64,${data}`;
 
     } catch (error) {
         console.error("Error calling Gemini API for thumbnail:", error);
