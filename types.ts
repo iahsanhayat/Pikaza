@@ -8,6 +8,5 @@ export interface GeneratedResult {
   storyScript?: string;
   prompts: string[];
   voiceover?: string;
-  thumbnailImage?: string;
   voiceoverAudio?: string;
 }

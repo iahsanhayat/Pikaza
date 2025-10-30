@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { CopyIcon, CheckIcon, SparklesIcon, DownloadIcon, LoadingSpinnerIcon, PhotoIcon } from './icons';
+import { CopyIcon, CheckIcon, SparklesIcon, DownloadIcon } from './icons';
 import type { GeneratedResult } from '../types';
 
 interface PromptDisplayProps {
   result: GeneratedResult | null;
   isLoading: boolean;
   error: string | null;
-  onGenerateThumbnail: () => Promise<void>;
-  isThumbnailLoading: boolean;
-  thumbnailError: string | null;
 }
 
 const LoadingSkeleton: React.FC = () => (
@@ -45,7 +42,7 @@ const renderMarkdown = (markdown: string) => {
     return <div dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading, error, onGenerateThumbnail, isThumbnailLoading, thumbnailError }) => {
+export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading, error }) => {
   const [isCopied, setIsCopied] = useState(false);
 
   useEffect(() => {
@@ -106,20 +103,6 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
     }
   }
 
-  const handleDownloadThumbnail = () => {
-    if (result?.thumbnailImage) {
-        const mimeType = result.thumbnailImage.split(';')[0].split(':')[1];
-        const extension = mimeType.split('/')[1] || 'png';
-        
-        const link = document.createElement('a');
-        link.href = result.thumbnailImage;
-        link.download = `pikaza_thumbnail.${extension}`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-  };
-
   const renderContent = () => {
     if (isLoading) {
       return <LoadingSkeleton />;
@@ -167,49 +150,12 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                     </div>
                 </div>
             )}
-
-            {result.thumbnailImage && (
-              <div>
-                <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-display font-bold text-text-light">Generated Thumbnail</h2>
-                    <button
-                        onClick={handleDownloadThumbnail}
-                        className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent-pink transition"
-                        aria-label="Download thumbnail image"
-                        title="Download thumbnail"
-                    >
-                        <DownloadIcon className="w-5 h-5" />
-                    </button>
-                </div>
-                <img src={result.thumbnailImage} alt="Generated Thumbnail" className="rounded-2xl shadow-lg w-full max-w-xl mx-auto mt-4" />
-              </div>
-            )}
             
             {result.prompts.length > 0 && (
                 <div>
                     <div className="flex justify-between items-center">
                         <h2 className="text-2xl font-display font-bold text-text-light">Image Prompts</h2>
-                        {!result.thumbnailImage && result.characterSheet && (
-                            <button
-                                onClick={onGenerateThumbnail}
-                                disabled={isThumbnailLoading}
-                                className="flex items-center justify-center gap-2 py-2 px-5 rounded-full text-sm font-semibold text-text-light bg-dark-card shadow-soft-outset hover:text-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
-                            >
-                                {isThumbnailLoading ? (
-                                    <>
-                                        <LoadingSpinnerIcon /> Generating...
-                                    </>
-                                ) : (
-                                    <>
-                                        <PhotoIcon className="w-4 h-4" /> Generate Thumbnail
-                                    </>
-                                )}
-                            </button>
-                        )}
                     </div>
-                    {thumbnailError && (
-                        <div className="text-red-400 bg-red-900/50 p-3 rounded-xl my-2 text-sm">{thumbnailError}</div>
-                    )}
                     <ol className="list-decimal pl-5 space-y-4 mt-4">
                         {result.prompts.map((p, i) => (
                             <li key={i} className="pl-2 leading-relaxed">{p}</li>

@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import type { CharacterProfile, GeneratedResult } from './types';
 import { CharacterInputForm } from './components/CharacterInputForm';
 import { PromptDisplay } from './components/PromptDisplay';
-import { generateStoryAndPrompts, generateVoiceoverScript, generateThumbnail, generateAudioFromScript, enhanceVoiceoverScript } from './services/geminiService';
+import { generateStoryAndPrompts, generateVoiceoverScript, generateAudioFromScript, enhanceVoiceoverScript } from './services/geminiService';
 
 const App: React.FC = () => {
   const [characterProfiles, setCharacterProfiles] = useState<CharacterProfile[]>([{
@@ -21,15 +21,12 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isVoiceoverLoading, setIsVoiceoverLoading] = useState<boolean>(false);
   const [isEnhancingScript, setIsEnhancingScript] = useState<boolean>(false);
-  const [isThumbnailLoading, setIsThumbnailLoading] = useState<boolean>(false);
   const [isAudioLoading, setIsAudioLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [thumbnailError, setThumbnailError] = useState<string | null>(null);
 
   const handleGenerate = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    setThumbnailError(null);
     setGeneratedResult(null);
     setEditableVoiceoverScript('');
 
@@ -119,24 +116,6 @@ const App: React.FC = () => {
     }
   }, [editableVoiceoverScript, selectedVoice]);
 
-  const handleGenerateThumbnail = useCallback(async () => {
-    if (!generatedResult?.characterSheet) return;
-
-    setIsThumbnailLoading(true);
-    setThumbnailError(null);
-    try {
-      const storyForThumbnail = generatedResult.storyScript || (storyMode === 'detail' ? storyScene : storyTitle);
-      const thumbnail = await generateThumbnail(generatedResult.characterSheet, storyForThumbnail, videoStyle);
-      setGeneratedResult(prev => prev ? { ...prev, thumbnailImage: thumbnail } : null);
-    } catch (e) {
-      console.error(e);
-      setThumbnailError(e instanceof Error ? e.message : 'An error occurred while generating the thumbnail.');
-    } finally {
-      setIsThumbnailLoading(false);
-    }
-  }, [generatedResult, storyMode, storyScene, storyTitle, videoStyle]);
-
-
   return (
     <div className="min-h-screen bg-dark-bg text-text-light flex flex-col">
       <header className="py-6 px-6 md:px-8">
@@ -178,9 +157,6 @@ const App: React.FC = () => {
           result={generatedResult}
           isLoading={isLoading}
           error={error}
-          onGenerateThumbnail={handleGenerateThumbnail}
-          isThumbnailLoading={isThumbnailLoading}
-          thumbnailError={thumbnailError}
         />
       </main>
     </div>

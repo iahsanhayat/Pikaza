@@ -23,6 +23,29 @@ const safetySettings = [
   },
 ];
 
+/**
+ * Parses API errors to provide a cleaner, more user-friendly message.
+ * @param error The error caught from the API call.
+ * @param context A string describing the operation that failed (e.g., 'story generation').
+ * @returns A formatted Error object.
+ */
+function handleApiError(error: unknown, context: string): Error {
+    console.error(`Error in ${context}:`, error);
+    if (error instanceof Error) {
+        try {
+            // The API often returns a JSON string in the error message
+            const errorJson = JSON.parse(error.message);
+            const message = errorJson?.error?.message || 'An unexpected API error occurred.';
+            const status = errorJson?.error?.status;
+            return new Error(`Failed during ${context}: ${message}${status ? ` (Status: ${status})` : ''}`);
+        } catch (e) {
+            // Not a JSON error message, return the original message
+            return new Error(`Failed during ${context}: ${error.message}`);
+        }
+    }
+    return new Error(`An unknown error occurred during ${context}.`);
+}
+
 interface GenerateOptions {
   characters: CharacterProfile[];
   numPrompts: number;
@@ -99,13 +122,13 @@ export async function generateStoryAndPrompts(
       config: {
         responseMimeType: "application/json",
         responseSchema: schema,
+        safetySettings: safetySettings,
       },
     });
     
     const jsonText = response.text;
 
     if (!jsonText || jsonText.trim() === '') {
-        console.error("Gemini API returned empty response for story generation.", response);
         const blockReason = response.promptFeedback?.blockReason;
         if (blockReason) {
             throw new Error(`Request was blocked due to ${blockReason}. Please adjust your prompt to be safer.`);
@@ -122,15 +145,10 @@ export async function generateStoryAndPrompts(
     return result;
 
   } catch (error) {
-    console.error("Error calling Gemini API:", error);
     if (error instanceof SyntaxError) {
         throw new Error("The AI returned a malformed response that could not be understood. Please try again.");
     }
-    // Re-throw specific errors to be displayed to the user
-    if (error instanceof Error && (error.message.startsWith('Request was blocked') || error.message.startsWith('The AI returned an empty'))) {
-        throw error;
-    }
-    throw new Error("Failed to generate content from the AI. Please check your inputs and try again.");
+    throw handleApiError(error, 'story and prompt generation');
   }
 }
 
@@ -158,12 +176,14 @@ export async function generateVoiceoverScript(storyScript: string, targetCharact
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
+      config: {
+        safetySettings: safetySettings,
+      },
     });
     
     const text = response.text;
 
     if (text === undefined || text === null) {
-        console.error("Gemini API returned empty response for voiceover.", response);
         const blockReason = response.promptFeedback?.blockReason;
         if (blockReason) {
             throw new Error(`Voiceover generation was blocked due to ${blockReason}.`);
@@ -173,12 +193,7 @@ export async function generateVoiceoverScript(storyScript: string, targetCharact
 
     return text;
   } catch (error) {
-    console.error("Error calling Gemini API for voiceover:", error);
-     // Re-throw specific errors to be displayed to the user
-    if (error instanceof Error && (error.message.startsWith('Voiceover generation was blocked') || error.message.startsWith('The AI returned an empty'))) {
-        throw error;
-    }
-    throw new Error("Failed to generate voiceover script from the AI. Please try again.");
+    throw handleApiError(error, 'voiceover generation');
   }
 }
 
@@ -204,12 +219,14 @@ export async function enhanceVoiceoverScript(script: string): Promise<string> {
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
+      config: {
+        safetySettings: safetySettings,
+      },
     });
     
     const text = response.text;
 
     if (text === undefined || text === null || text.trim() === '') {
-        console.error("Gemini API returned empty response for script enhancement.", response);
         const blockReason = response.promptFeedback?.blockReason;
         if (blockReason) {
             throw new Error(`Script enhancement was blocked due to ${blockReason}.`);
@@ -219,11 +236,7 @@ export async function enhanceVoiceoverScript(script: string): Promise<string> {
 
     return text;
   } catch (error) {
-    console.error("Error calling Gemini API for script enhancement:", error);
-    if (error instanceof Error && (error.message.startsWith('Script enhancement was blocked') || error.message.startsWith('The AI returned an empty'))) {
-        throw error;
-    }
-    throw new Error("Failed to enhance script from the AI. Please try again.");
+    throw handleApiError(error, 'script enhancement');
   }
 }
 
@@ -239,81 +252,22 @@ export async function generateAudioFromScript(script: string, voiceName: string)
                         prebuiltVoiceConfig: { voiceName: voiceName },
                     },
                 },
+                safetySettings: safetySettings,
             },
         });
 
         const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
         if (!base64Audio) {
-            console.error("TTS API returned no audio data.", response);
              const blockReason = response.promptFeedback?.blockReason;
             if (blockReason) {
                 throw new Error(`Audio generation was blocked due to ${blockReason}.`);
             }
-            throw new Error("The AI failed to generate audio. Please try again.");
+            throw new Error("The AI failed to generate audio. The response did not contain audio data.");
         }
 
         return base64Audio;
     } catch (error) {
-        console.error("Error calling TTS API for audio generation:", error);
-        throw new Error("Failed to generate audio from the AI. Please try again.");
-    }
-}
-
-export async function generateThumbnail(
-    characterSheet: string,
-    story: string,
-    videoStyle: string
-): Promise<string> {
-    const prompt = `
-        Generate a high-quality, cinematic, visually stunning YouTube video thumbnail.
-        The image must have a 16:9 aspect ratio.
-        The overall style should be: "${videoStyle}".
-        The scene should depict a powerful, eye-catching, and emotionally resonant moment from this story: "${story}".
-        The image must feature the character(s) described below. It is crucial to maintain perfect visual consistency with their character sheet.
-        ---
-        CHARACTER SHEET:
-        ${characterSheet}
-        ---
-        The composition should be dynamic, with professional lighting, focusing on a single, powerful moment.
-        CRITICAL: The final image must not contain any text, words, logos, or watermarks.
-    `;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: {
-                parts: [{ text: prompt }],
-            },
-            config: {
-                // Must be an array with a single `Modality.IMAGE` element.
-                responseModalities: [Modality.IMAGE],
-            },
-        });
-
-        // Loop through the parts to find the image data
-        for (const part of response.candidates[0].content.parts) {
-            if (part.inlineData) {
-                const base64ImageBytes: string = part.inlineData.data;
-                const mimeType: string = part.inlineData.mimeType;
-                return `data:${mimeType};base64,${base64ImageBytes}`;
-            }
-        }
-        
-        // If no image part is found, throw an error
-        console.error("Gemini flash-image API returned no image data for thumbnail.", response);
-        const blockReason = response.promptFeedback?.blockReason;
-        if (blockReason) {
-            throw new Error(`Thumbnail generation was blocked due to ${blockReason}. Please adjust your prompt.`);
-        }
-        throw new Error("The AI failed to generate a thumbnail image. The response did not contain image data.");
-
-    } catch (error) {
-        console.error("Error calling Gemini flash-image API for thumbnail:", error);
-        if (error instanceof Error) {
-            // Pass the underlying error message for better debugging.
-            throw new Error(`Failed to generate thumbnail from the AI: ${error.message}`);
-        }
-        throw new Error("Failed to generate thumbnail from the AI. An unknown error occurred.");
+        throw handleApiError(error, 'audio generation');
     }
 }
