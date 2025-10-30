@@ -93,7 +93,6 @@ export async function generateStoryAndPrompts(
   `;
 
   try {
-    // FIX: Removed `safetySettings` as it's not a valid property for `generateContent`.
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: masterPrompt,
@@ -156,7 +155,6 @@ export async function generateVoiceoverScript(storyScript: string, targetCharact
   `;
 
   try {
-    // FIX: Removed `safetySettings` from `config` as it's not a valid property for `generateContent`.
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
@@ -203,7 +201,6 @@ export async function enhanceVoiceoverScript(script: string): Promise<string> {
   `;
 
   try {
-    // FIX: Removed `safetySettings` from `config` as it's not a valid property for `generateContent`.
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
@@ -232,7 +229,6 @@ export async function enhanceVoiceoverScript(script: string): Promise<string> {
 
 export async function generateAudioFromScript(script: string, voiceName: string): Promise<string> {
     try {
-        // FIX: Removed `safetySettings` as it's not a valid property for `generateContent`.
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash-preview-tts",
             contents: [{ parts: [{ text: script }] }],
@@ -270,48 +266,43 @@ export async function generateThumbnail(
     videoStyle: string
 ): Promise<string> {
     const prompt = `
-        Generate a 16:9 aspect ratio, high-quality, cinematic, visually stunning YouTube video thumbnail in the style of: ${videoStyle}.
-        The thumbnail must feature the character(s) described in the character sheet below, ensuring their appearance is perfectly consistent.
+        A high-quality, cinematic, visually stunning YouTube video thumbnail in a 16:9 aspect ratio.
+        Style: ${videoStyle}.
+        Scene: Depict a powerful, eye-catching, and emotionally resonant moment from the story: "${story}".
+        Characters: Feature the character(s) described below, ensuring perfect visual consistency with their character sheet.
         ---
-        **Character Sheet:**
         ${characterSheet}
         ---
-        The scene should represent the core of this story: "${story}".
-        Make the thumbnail extremely eye-catching, dramatic, and emotionally resonant to attract viewers and make them want to click.
-        The composition should be dynamic, with professional lighting, focusing on a single, powerful moment.
+        Composition: The composition should be dynamic, with professional lighting, focusing on a single, powerful moment. Do not include any text, logos, or watermarks on the image.
     `;
 
     try {
-        // FIX: Removed `safetySettings` as it's not a valid property for `generateContent`.
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: {
-                parts: [{ text: prompt }],
-            },
+        const response = await ai.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
             config: {
-                responseModalities: [Modality.IMAGE],
+                numberOfImages: 1,
+                outputMimeType: 'image/jpeg',
+                aspectRatio: '16:9',
             },
         });
+        
+        const image = response.generatedImages?.[0]?.image;
 
-        const imagePart = response.candidates?.[0]?.content?.parts?.find(part => part.inlineData);
-
-        if (!imagePart || !imagePart.inlineData) {
-            console.error("Gemini API returned no image data for thumbnail.", response);
-            const blockReason = response.promptFeedback?.blockReason;
-            if (blockReason) {
-                throw new Error(`Thumbnail generation was blocked due to ${blockReason}. Please adjust your prompt.`);
-            }
-            throw new Error("The AI failed to generate a thumbnail image. Please try again.");
+        if (!image || !image.imageBytes) {
+            console.error("Imagen API returned no image data for thumbnail.", response);
+            throw new Error("The AI failed to generate a thumbnail image. The response from the server was empty.");
         }
         
-        const { mimeType, data } = imagePart.inlineData;
-        return `data:${mimeType};base64,${data}`;
+        const base64ImageBytes: string = image.imageBytes;
+        return `data:image/jpeg;base64,${base64ImageBytes}`;
 
     } catch (error) {
-        console.error("Error calling Gemini API for thumbnail:", error);
-        if (error instanceof Error && error.message.startsWith('Thumbnail generation was blocked')) {
-            throw error;
+        console.error("Error calling Imagen API for thumbnail:", error);
+        if (error instanceof Error) {
+            // Pass the underlying error message for better debugging.
+            throw new Error(`Failed to generate thumbnail from the AI: ${error.message}`);
         }
-        throw new Error("Failed to generate thumbnail from the AI. Please try again.");
+        throw new Error("Failed to generate thumbnail from the AI. An unknown error occurred.");
     }
 }
