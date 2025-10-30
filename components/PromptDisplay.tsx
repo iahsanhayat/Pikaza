@@ -108,8 +108,11 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
   const handleDownloadThumbnail = () => {
     if (result?.thumbnailImage) {
         const link = document.createElement('a');
-        link.href = `data:image/jpeg;base64,${result.thumbnailImage}`;
-        link.download = 'thumbnail.jpeg';
+        link.href = result.thumbnailImage;
+        const mimeTypeMatch = result.thumbnailImage.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+).*,.*/);
+        const mimeType = mimeTypeMatch && mimeTypeMatch.length > 1 ? mimeTypeMatch[1] : 'image/jpeg';
+        const extension = mimeType.split('/')[1] || 'jpeg';
+        link.download = `thumbnail.${extension}`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -175,7 +178,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                             </div>
                         ) : result.thumbnailImage ? (
                             <div className="relative group">
-                                <img src={`data:image/jpeg;base64,${result.thumbnailImage}`} alt="Generated Thumbnail" className="w-full h-auto rounded-lg" />
+                                <img src={result.thumbnailImage} alt="Generated Thumbnail" className="w-full h-auto rounded-lg" />
                                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
                                     <button 
                                         onClick={handleDownloadThumbnail}

@@ -269,14 +269,15 @@ export async function generateAudioFromScript(script: string, voiceName: string)
 
 export async function generateThumbnail(characterSheet: string, storyScript: string | undefined, videoStyle: string): Promise<string> {
     const promptGenerationPrompt = `
-        Based on the following character sheet and story, create a single, highly detailed, and visually captivating prompt for an AI image generator (Imagen) to create a YouTube video thumbnail in a 16:9 aspect ratio.
+        Based on the following character sheet and story, create a single, highly detailed, and visually captivating prompt for an AI image generator to create a YouTube video thumbnail.
 
         **Instructions for the Prompt:**
         1.  **Style:** The style MUST be: "${videoStyle}".
         2.  **Focus:** The thumbnail must feature the main character(s) prominently in a dynamic or emotionally resonant pose.
         3.  **Composition:** Describe a compelling scene that captures the essence of the story. Use strong keywords for composition, lighting, and mood (e.g., "dramatic lighting," "cinematic composition," "action shot," "intense close-up").
         4.  **Clarity:** Be extremely descriptive to ensure the generated image is high-quality and detailed.
-        5.  **Output:** Your entire output should be ONLY the final image prompt text, with no extra explanations, labels, or quotation marks.
+        5.  **Aspect Ratio:** The prompt MUST end with "--ar 16:9" to ensure the correct thumbnail dimensions.
+        6.  **Output:** Your entire output should be ONLY the final image prompt text, with no extra explanations, labels, or quotation marks.
 
         **Character Sheet:**
         ---
@@ -310,24 +311,44 @@ export async function generateThumbnail(characterSheet: string, storyScript: str
             throw new Error("Failed to generate a thumbnail prompt.");
         }
 
-        // Step 2: Generate the image using the created prompt
-        const imageResponse = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
-            prompt: imagePrompt.trim(),
+        // Step 2: Generate the image using the created prompt with gemini-2.5-flash-image
+        const imageResponse = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: {
+                parts: [
+                    {
+                        text: imagePrompt.trim(),
+                    },
+                ],
+            },
             config: {
-                numberOfImages: 1,
-                outputMimeType: 'image/jpeg',
-                aspectRatio: '16:9',
+                responseModalities: [Modality.IMAGE],
+                safetySettings: safetySettings,
             },
         });
 
-        const base64ImageBytes = imageResponse.generatedImages[0]?.image?.imageBytes;
+        let base64ImageBytes: string | undefined;
+        let mimeType: string | undefined;
 
-        if (!base64ImageBytes) {
-            throw new Error("The AI failed to generate a thumbnail image. The response may have been blocked for safety reasons.");
+        if (imageResponse.candidates && imageResponse.candidates.length > 0) {
+            for (const part of imageResponse.candidates[0].content.parts) {
+                if (part.inlineData) {
+                    base64ImageBytes = part.inlineData.data;
+                    mimeType = part.inlineData.mimeType;
+                    break;
+                }
+            }
         }
 
-        return base64ImageBytes;
+        if (!base64ImageBytes || !mimeType) {
+            const blockReason = imageResponse.promptFeedback?.blockReason;
+            if (blockReason) {
+                throw new Error(`Thumbnail image generation was blocked due to ${blockReason}.`);
+            }
+            throw new Error("The AI failed to generate a thumbnail image. The response did not contain image data.");
+        }
+
+        return `data:${mimeType};base64,${base64ImageBytes}`;
 
     } catch (error) {
         throw handleApiError(error, 'thumbnail generation');
