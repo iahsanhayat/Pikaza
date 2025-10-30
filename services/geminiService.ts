@@ -266,39 +266,50 @@ export async function generateThumbnail(
     videoStyle: string
 ): Promise<string> {
     const prompt = `
-        A high-quality, cinematic, visually stunning YouTube video thumbnail in a 16:9 aspect ratio.
-        Style: ${videoStyle}.
-        Scene: Depict a powerful, eye-catching, and emotionally resonant moment from the story: "${story}".
-        Characters: Feature the character(s) described below, ensuring perfect visual consistency with their character sheet.
+        Generate a high-quality, cinematic, visually stunning YouTube video thumbnail.
+        The image must have a 16:9 aspect ratio.
+        The overall style should be: "${videoStyle}".
+        The scene should depict a powerful, eye-catching, and emotionally resonant moment from this story: "${story}".
+        The image must feature the character(s) described below. It is crucial to maintain perfect visual consistency with their character sheet.
         ---
+        CHARACTER SHEET:
         ${characterSheet}
         ---
-        Composition: The composition should be dynamic, with professional lighting, focusing on a single, powerful moment. Do not include any text, logos, or watermarks on the image.
+        The composition should be dynamic, with professional lighting, focusing on a single, powerful moment.
+        CRITICAL: The final image must not contain any text, words, logos, or watermarks.
     `;
 
     try {
-        const response = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
-            prompt: prompt,
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: {
+                parts: [{ text: prompt }],
+            },
             config: {
-                numberOfImages: 1,
-                outputMimeType: 'image/jpeg',
-                aspectRatio: '16:9',
+                // Must be an array with a single `Modality.IMAGE` element.
+                responseModalities: [Modality.IMAGE],
             },
         });
-        
-        const image = response.generatedImages?.[0]?.image;
 
-        if (!image || !image.imageBytes) {
-            console.error("Imagen API returned no image data for thumbnail.", response);
-            throw new Error("The AI failed to generate a thumbnail image. The response from the server was empty.");
+        // Loop through the parts to find the image data
+        for (const part of response.candidates[0].content.parts) {
+            if (part.inlineData) {
+                const base64ImageBytes: string = part.inlineData.data;
+                const mimeType: string = part.inlineData.mimeType;
+                return `data:${mimeType};base64,${base64ImageBytes}`;
+            }
         }
         
-        const base64ImageBytes: string = image.imageBytes;
-        return `data:image/jpeg;base64,${base64ImageBytes}`;
+        // If no image part is found, throw an error
+        console.error("Gemini flash-image API returned no image data for thumbnail.", response);
+        const blockReason = response.promptFeedback?.blockReason;
+        if (blockReason) {
+            throw new Error(`Thumbnail generation was blocked due to ${blockReason}. Please adjust your prompt.`);
+        }
+        throw new Error("The AI failed to generate a thumbnail image. The response did not contain image data.");
 
     } catch (error) {
-        console.error("Error calling Imagen API for thumbnail:", error);
+        console.error("Error calling Gemini flash-image API for thumbnail:", error);
         if (error instanceof Error) {
             // Pass the underlying error message for better debugging.
             throw new Error(`Failed to generate thumbnail from the AI: ${error.message}`);
@@ -306,4 +317,3 @@ export async function generateThumbnail(
         throw new Error("Failed to generate thumbnail from the AI. An unknown error occurred.");
     }
 }
-
