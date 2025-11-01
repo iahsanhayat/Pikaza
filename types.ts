@@ -5,6 +5,8 @@ export interface CharacterProfile {
 
 export interface ScenePrompt {
   scene_number: number;
+  start_time_seconds: number;
+  end_time_seconds: number;
   prompt: string;
 }
 
@@ -16,14 +18,4 @@ export interface GeneratedResult {
   voiceoverAudio?: string;
   thumbnailPrompt?: string;
   thumbnailImage?: string;
-}
-
-export interface ExtractedCharacter {
-  name: string;
-  description: string;
-}
-
-export interface IntermediateResult {
-  storyScript: string;
-  characters: ExtractedCharacter[];
 }

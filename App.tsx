@@ -1,26 +1,25 @@
 import React, { useState, useCallback } from 'react';
-import type { GeneratedResult, CharacterProfile, IntermediateResult } from './types';
+import type { GeneratedResult, CharacterProfile } from './types';
 import { CharacterInputForm } from './components/CharacterInputForm';
 import { PromptDisplay } from './components/PromptDisplay';
-import { generateStoryAndExtractCharacters, generateFinalAssets, generateVoiceoverScript, generateAudioFromScript, enhanceVoiceoverScript, generateThumbnailPrompt, generateThumbnailImage } from './services/geminiService';
-
-type AppStage = 'input' | 'refinement' | 'finalizing';
+import { generateStoryAndPrompts, generateVoiceoverScript, generateAudioFromScript, enhanceVoiceoverScript, generateThumbnailPrompt, generateThumbnailImage } from './services/geminiService';
 
 const App: React.FC = () => {
-  const [characterProfiles, setCharacterProfiles] = useState<CharacterProfile[]>([]);
+  const [characterProfiles, setCharacterProfiles] = useState<CharacterProfile[]>([{
+    name: '',
+    appearance: '',
+  }]);
   const [storyScene, setStoryScene] = useState<string>('');
   const [storyTitle, setStoryTitle] = useState<string>('');
   const [storyMode, setStoryMode] = useState<'detail' | 'quick'>('detail');
-  const [numPrompts, setNumPrompts] = useState<number>(5);
+  const [videoLengthMinutes, setVideoLengthMinutes] = useState<number>(1);
+  const [numPrompts, setNumPrompts] = useState<number>(Math.ceil(1 * 60 / 8));
   const [videoStyle, setVideoStyle] = useState<string>('3D Pixar style');
   const [selectedVoice, setSelectedVoice] = useState<string>('Fenrir');
   const [voiceoverLanguage, setVoiceoverLanguage] = useState<string>('English');
 
-  const [appStage, setAppStage] = useState<AppStage>('input');
-  const [intermediateResult, setIntermediateResult] = useState<IntermediateResult | null>(null);
   const [generatedResult, setGeneratedResult] = useState<GeneratedResult | null>(null);
   const [editableVoiceoverScript, setEditableVoiceoverScript] = useState<string>('');
-  
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isVoiceoverLoading, setIsVoiceoverLoading] = useState<boolean>(false);
   const [isEnhancingScript, setIsEnhancingScript] = useState<boolean>(false);
@@ -29,77 +28,48 @@ const App: React.FC = () => {
   const [isThumbnailImageLoading, setIsThumbnailImageLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerateStory = useCallback(async () => {
+  const handleVideoLengthChange = (minutes: number) => {
+    const validMinutes = Math.max(0.1, minutes) || 1;
+    setVideoLengthMinutes(validMinutes);
+    setNumPrompts(Math.ceil(validMinutes * 60 / 8));
+  };
+
+  const handleNumPromptsChange = (count: number) => {
+    const validCount = Math.max(1, count) || 1;
+    setNumPrompts(validCount);
+    setVideoLengthMinutes(parseFloat((validCount * 8 / 60).toFixed(1)));
+  };
+
+
+  const handleGenerate = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     setGeneratedResult(null);
-    setIntermediateResult(null);
     setEditableVoiceoverScript('');
-    setCharacterProfiles([]);
 
     const sceneOrTitle = storyMode === 'detail' ? storyScene : storyTitle;
-    if (!sceneOrTitle) {
-      setError('Please provide a story scene or title to begin.');
+    if (!characterProfiles.some(c => c.appearance.trim()) || !sceneOrTitle) {
+      setError('Please provide appearance details for at least one character and a story scene/title.');
       setIsLoading(false);
       return;
     }
 
     try {
-      const result = await generateStoryAndExtractCharacters({
+      const result = await generateStoryAndPrompts({
+        characters: characterProfiles.filter(c => c.appearance.trim()),
+        numPrompts,
         mode: storyMode,
         sceneOrTitle,
-        numPrompts,
+        videoStyle,
       });
-      setIntermediateResult(result);
-      setCharacterProfiles(result.characters.map(c => ({ name: c.name, appearance: '' })));
-      setAppStage('refinement');
+      setGeneratedResult(result);
     } catch (e) {
       console.error(e);
-      setError('An error occurred while generating the story. Please try again.');
+      setError('An error occurred while generating the content. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [storyScene, storyTitle, storyMode, numPrompts]);
-
-  const handleFinalize = useCallback(async () => {
-    if (!intermediateResult) return;
-
-    setIsLoading(true);
-    setAppStage('finalizing');
-    setError(null);
-
-    // Combine AI description with user's custom appearance details
-    const finalCharacterProfiles = intermediateResult.characters.map((char, index) => ({
-        name: char.name,
-        appearance: `${char.description} ${characterProfiles[index]?.appearance || ''}`.trim()
-    }));
-
-    try {
-        const finalAssets = await generateFinalAssets({
-            characters: finalCharacterProfiles,
-            storyScript: intermediateResult.storyScript,
-            numPrompts,
-            videoStyle
-        });
-
-        setGeneratedResult({
-            ...finalAssets,
-            storyScript: intermediateResult.storyScript
-        });
-        // Reset for next run
-        setAppStage('input');
-        setIntermediateResult(null);
-        setCharacterProfiles([]);
-
-    } catch (e) {
-        console.error(e);
-        setError('An error occurred while generating the final prompts. Please try again.');
-        setAppStage('refinement'); // Go back to refinement stage on error
-    } finally {
-        setIsLoading(false);
-    }
-  }, [intermediateResult, characterProfiles, numPrompts, videoStyle]);
-
+  }, [characterProfiles, storyScene, storyTitle, storyMode, numPrompts, videoStyle]);
 
   const handleGenerateVoiceover = useCallback(async () => {
     if (!generatedResult?.storyScript) return;
@@ -107,16 +77,17 @@ const App: React.FC = () => {
     setIsVoiceoverLoading(true);
     setError(null);
     try {
-        const voiceover = await generateVoiceoverScript(generatedResult.storyScript, generatedResult.prompts.length, voiceoverLanguage);
+        const targetCharacterCount = numPrompts * 125;
+        const voiceover = await generateVoiceoverScript(generatedResult.storyScript, targetCharacterCount, voiceoverLanguage);
         setGeneratedResult(prev => prev ? { ...prev, voiceover, voiceoverAudio: undefined } : null); // Reset audio when script changes
         setEditableVoiceoverScript(voiceover);
     } catch (e) {
         console.error(e);
-        setError('An error occurred while generating the voiceover script. Please try again.');
+        setError('An error occurred while generating the voiceover. Please try again.');
     } finally {
         setIsVoiceoverLoading(false);
     }
-  }, [generatedResult, voiceoverLanguage]);
+  }, [generatedResult, numPrompts, voiceoverLanguage]);
 
   const handleEnhanceScript = useCallback(async () => {
     if (!editableVoiceoverScript.trim()) return;
@@ -208,7 +179,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-dark-bg text-text-light flex flex-col">
       <header className="py-6 px-6 md:px-8">
-        <h1 className="text-2xl md:text-3xl font-bold font-display text-text-light">
+        <h1 className="text-3xl md:text-4xl font-bold font-display text-text-light">
           Pikaza
         </h1>
         <p className="text-text-medium mt-1">AI Consistent Character Tool</p>
@@ -216,7 +187,6 @@ const App: React.FC = () => {
 
       <main className="flex-grow container mx-auto p-4 md:p-6 lg:p-12 grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
         <CharacterInputForm
-          appStage={appStage}
           characterProfiles={characterProfiles}
           setCharacterProfiles={setCharacterProfiles}
           storyScene={storyScene}
@@ -225,11 +195,13 @@ const App: React.FC = () => {
           setStoryTitle={setStoryTitle}
           storyMode={storyMode}
           setStoryMode={setStoryMode}
+          videoLengthMinutes={videoLengthMinutes}
+          setVideoLengthMinutes={handleVideoLengthChange}
           numPrompts={numPrompts}
-          setNumPrompts={setNumPrompts}
+          setNumPrompts={handleNumPromptsChange}
           videoStyle={videoStyle}
           setVideoStyle={setVideoStyle}
-          onSubmit={appStage === 'input' ? handleGenerateStory : handleFinalize}
+          onSubmit={handleGenerate}
           isLoading={isLoading}
           result={generatedResult}
           onGenerateVoiceover={handleGenerateVoiceover}
@@ -238,17 +210,16 @@ const App: React.FC = () => {
           isEnhancingScript={isEnhancingScript}
           selectedVoice={selectedVoice}
           setSelectedVoice={setSelectedVoice}
+          voiceoverLanguage={voiceoverLanguage}
+          setVoiceoverLanguage={setVoiceoverLanguage}
           onGenerateAudio={handleGenerateAudio}
           isAudioLoading={isAudioLoading}
           editableVoiceoverScript={editableVoiceoverScript}
           setEditableVoiceoverScript={setEditableVoiceoverScript}
-          intermediateResult={intermediateResult}
-          voiceoverLanguage={voiceoverLanguage}
-          setVoiceoverLanguage={setVoiceoverLanguage}
         />
         <PromptDisplay
           result={generatedResult}
-          isLoading={appStage === 'finalizing'}
+          isLoading={isLoading}
           error={error}
           isThumbnailLoading={isThumbnailLoading}
           onGenerateThumbnail={handleGenerateThumbnail}

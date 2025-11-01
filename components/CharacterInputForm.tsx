@@ -1,10 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import type { CharacterProfile, GeneratedResult, IntermediateResult } from '../types';
+import type { CharacterProfile, GeneratedResult } from '../types';
 import { LoadingSpinnerIcon, MicIcon, PlayIcon, PauseIcon, DownloadIcon, SparklesIcon, TrashIcon } from './icons';
 import { generateAudioFromScript } from '../services/geminiService';
 
 interface CharacterInputFormProps {
-  appStage: 'input' | 'refinement' | 'finalizing';
   characterProfiles: CharacterProfile[];
   setCharacterProfiles: React.Dispatch<React.SetStateAction<CharacterProfile[]>>;
   storyScene: string;
@@ -13,8 +12,10 @@ interface CharacterInputFormProps {
   setStoryTitle: React.Dispatch<React.SetStateAction<string>>;
   storyMode: 'detail' | 'quick';
   setStoryMode: React.Dispatch<React.SetStateAction<'detail' | 'quick'>>;
+  videoLengthMinutes: number;
+  setVideoLengthMinutes: (minutes: number) => void;
   numPrompts: number;
-  setNumPrompts: React.Dispatch<React.SetStateAction<number>>;
+  setNumPrompts: (count: number) => void;
   videoStyle: string;
   setVideoStyle: React.Dispatch<React.SetStateAction<string>>;
   onSubmit: () => void;
@@ -26,35 +27,38 @@ interface CharacterInputFormProps {
   isEnhancingScript: boolean;
   selectedVoice: string;
   setSelectedVoice: React.Dispatch<React.SetStateAction<string>>;
+  voiceoverLanguage: string;
+  setVoiceoverLanguage: React.Dispatch<React.SetStateAction<string>>;
   onGenerateAudio: () => void;
   isAudioLoading: boolean;
   editableVoiceoverScript: string;
   setEditableVoiceoverScript: React.Dispatch<React.SetStateAction<string>>;
-  intermediateResult: IntermediateResult | null;
-  voiceoverLanguage: string;
-  setVoiceoverLanguage: React.Dispatch<React.SetStateAction<string>>;
 }
 
 const InputField: React.FC<{
   id: string;
   name?: string;
   label: string;
-  value: string;
+  value: string | number;
   placeholder: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}> = ({ id, name, label, value, placeholder, onChange }) => (
+  type?: string;
+  min?: string;
+  step?: string;
+}> = ({ id, name, label, value, placeholder, onChange, type = "text", ...props }) => (
   <div>
     <label htmlFor={id} className="block text-sm font-medium text-text-medium mb-2">
       {label}
     </label>
     <input
-      type="text"
+      type={type}
       id={id}
       name={name || id}
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className="w-full bg-dark-input rounded-xl shadow-soft-inset py-3 px-4 text-text-light focus:outline-none focus:ring-2 focus:ring-accent-pink/50 border-transparent transition-all duration-300"
+      className="w-full bg-dark-input rounded-xl shadow-soft-inset py-3 px-4 text-text-light focus:outline-none focus:ring-2 focus:ring-accent/50 border-transparent transition-all duration-300"
+      {...props}
     />
   </div>
 );
@@ -73,7 +77,7 @@ const TextareaField: React.FC<{
 }> = ({ id, name, label, value, placeholder, onChange, rows = 4, required = false, disabled = false, maxLength }) => (
   <div>
     <label htmlFor={id} className="block text-sm font-medium text-text-medium mb-2">
-      {label} {required && <span className="text-accent-pink">*</span>}
+      {label} {required && <span className="text-accent">*</span>}
     </label>
     <textarea
       id={id}
@@ -84,7 +88,7 @@ const TextareaField: React.FC<{
       rows={rows}
       disabled={disabled}
       maxLength={maxLength}
-      className="w-full bg-dark-input rounded-xl shadow-soft-inset py-3 px-4 text-text-light focus:outline-none focus:ring-2 focus:ring-accent-pink/50 border-transparent transition-all duration-300 disabled:opacity-50"
+      className="w-full bg-dark-input rounded-xl shadow-soft-inset py-3 px-4 text-text-light focus:outline-none focus:ring-2 focus:ring-accent/50 border-transparent transition-all duration-300 disabled:opacity-50"
     />
   </div>
 );
@@ -95,7 +99,7 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; children: Reac
         onClick={onClick}
         className={`flex-1 py-2 px-4 text-sm font-semibold rounded-full transition-all duration-300 focus:outline-none ${
             active 
-            ? 'bg-accent-pink text-white shadow-md shadow-accent-pink/30' 
+            ? 'bg-accent text-dark-bg shadow-md shadow-accent/30' 
             : 'text-text-medium hover:text-text-light'
         }`}
     >
@@ -170,7 +174,6 @@ const createWavFile = (pcmData: Uint8Array, sampleRate: number, numChannels: num
 
 
 export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
-  appStage,
   characterProfiles,
   setCharacterProfiles,
   storyScene,
@@ -179,6 +182,8 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   setStoryTitle,
   storyMode,
   setStoryMode,
+  videoLengthMinutes,
+  setVideoLengthMinutes,
   numPrompts,
   setNumPrompts,
   videoStyle,
@@ -192,25 +197,33 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   isEnhancingScript,
   selectedVoice,
   setSelectedVoice,
+  voiceoverLanguage,
+  setVoiceoverLanguage,
   onGenerateAudio,
   isAudioLoading,
   editableVoiceoverScript,
   setEditableVoiceoverScript,
-  intermediateResult,
-  voiceoverLanguage,
-  setVoiceoverLanguage,
 }) => {
   const [activeStep, setActiveStep] = useState(1);
+  const [inputMode, setInputMode] = useState<'minutes' | 'count'>('minutes');
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const audioContextRef = useRef<AudioContext | null>(null);
   const [sampleLoadingVoice, setSampleLoadingVoice] = useState<string | null>(null);
-  const VOICEOVER_CHAR_LIMIT = 10000;
+  const VOICEOVER_CHAR_LIMIT = numPrompts * 150;
 
   const [audioState, setAudioState] = useState<'paused' | 'playing' | 'stopped'>('stopped');
   const audioSourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
   const pauseTimeRef = useRef(0);
   const startTimeRef = useRef(0);
+  
+    const handleAddCharacter = () => {
+        setCharacterProfiles(prev => [...prev, { name: '', appearance: '' }]);
+    };
+
+    const handleRemoveCharacter = (index: number) => {
+        setCharacterProfiles(prev => prev.filter((_, i) => i !== index));
+    };
 
 
   const handleProfileChange = (index: number, e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -378,19 +391,14 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   };
 
   const navItems = [
-    { step: 1, title: 'Create Your Story' },
+    { step: 1, title: 'Define Characters & Story' },
     { step: 2, title: 'Define Video Style' },
     { step: 3, title: 'Configure Video Output' },
     { step: 4, title: 'Generate Voiceover', disabled: !result },
   ];
   
-  const isRefinementComplete = characterProfiles.some(p => p.appearance.trim() !== '');
-  const isSubmitDisabled = isLoading || (appStage === 'input' && (storyMode === 'detail' ? !storyScene : !storyTitle)) || (appStage === 'refinement' && !isRefinementComplete);
-  const submitButtonText = appStage === 'input' ? 'Generate Story & Characters' : 'Finalize & Generate Prompts';
-
-  const totalSeconds = numPrompts * 8;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
+  const isSubmitDisabled = isLoading || !characterProfiles.some(c => c.appearance.trim()) || (storyMode === 'detail' ? !storyScene : !storyTitle);
+  const submitButtonText = 'Generate Story & Prompts';
 
 
   const NavItem: React.FC<{ step: number; title: string; disabled?: boolean }> = ({ step, title, disabled = false }) => (
@@ -400,244 +408,246 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
         disabled={disabled}
         className={`w-full text-left px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
           activeStep === step
-            ? 'bg-accent-pink/20 text-accent-pink'
+            ? 'bg-accent/10 text-accent'
             : 'text-text-medium hover:bg-white/5 hover:text-text-light'
         } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent`}
       >
-        <span className={`font-bold mr-2 ${activeStep === step ? 'text-accent-pink' : 'text-text-medium'}`}>{step}.</span> {title}
+        <span className={`font-bold mr-2 ${activeStep === step ? 'text-accent' : 'text-text-medium'}`}>{step}.</span> {title}
       </button>
-  );
-
-  const renderRefinementStage = () => {
-    if (!intermediateResult) return null;
-    return (
-        <div className="space-y-6">
-            <h2 className="text-2xl font-bold font-display text-text-light">Refine Your Characters</h2>
-            <div>
-                <h3 className="text-lg font-semibold text-text-light mb-2">Generated Story</h3>
-                <div className="bg-dark-input rounded-xl shadow-soft-inset p-4 text-text-medium text-sm max-h-40 overflow-y-auto">
-                    {intermediateResult.storyScript}
-                </div>
-            </div>
-            {intermediateResult.characters.map((char, index) => (
-                <div key={index} className="bg-dark-input rounded-2xl p-4 shadow-soft-inset">
-                    <h4 className="text-lg font-semibold text-accent-pink">{char.name}</h4>
-                    <p className="text-sm text-text-medium italic mb-3">"{char.description}"</p>
-                    <TextareaField 
-                        id={`appearance-${index}`}
-                        name="appearance"
-                        label="Add Custom Appearance Details (Optional)"
-                        value={characterProfiles[index]?.appearance || ''}
-                        onChange={(e) => handleProfileChange(index, e)}
-                        placeholder="e.g., silver hair in a messy bun, one green eye one blue, scar over left eyebrow..."
-                        rows={3}
-                        required={false}
-                    />
-                </div>
-            ))}
-             {!isRefinementComplete && <p className="text-xs text-accent-pink text-center">Custom appearance details for at least one character are required to proceed.</p>}
-        </div>
-    );
-  }
-
-  const renderInputStage = () => (
-     <div className="flex-grow space-y-8 overflow-y-auto p-4 -m-4">
-        {activeStep === 1 && (
-            <div className="space-y-6">
-                <h2 className="text-2xl font-bold font-display text-text-light">1. Create Your Story</h2>
-                <div className="flex bg-dark-input p-1 rounded-full space-x-1 shadow-soft-inset">
-                    <TabButton active={storyMode === 'detail'} onClick={() => setStoryMode('detail')}>Detailed Scene</TabButton>
-                    <TabButton active={storyMode === 'quick'} onClick={() => setStoryMode('quick')}>Quick Story</TabButton>
-                </div>
-                {storyMode === 'detail' ? (
-                    <TextareaField id="storyScene" label="Story Scene / Plot Point" value={storyScene} placeholder="Describe the action. e.g., 'Kaelen stands on a rain-slicked rooftop at midnight, overlooking a neon-lit futuristic city, preparing to leap.'" onChange={handleSceneChange} rows={5} required />
-                ) : (
-                    <TextareaField id="storyTitle" label="Story Title or Description" value={storyTitle} placeholder="Provide a title or a short idea. e.g., 'The Last Dragon Rider's Gambit' or 'A detective discovers a magical secret in 1940s New York.'" onChange={handleTitleChange} rows={5} required />
-                )}
-            </div>
-        )}
-        {activeStep === 2 && (
-            <div className="space-y-6">
-                <h2 className="text-2xl font-bold font-display text-text-light">2. Define Video Style</h2>
-                <div>
-                    <label htmlFor="videoStyleSelect" className="block text-sm font-medium text-text-medium mb-2">Video Style</label>
-                    <select id="videoStyleSelect" value={selectValue} onChange={handleStyleSelectChange} className="w-full bg-dark-input rounded-xl shadow-soft-inset py-3 px-4 text-text-light focus:outline-none focus:ring-2 focus:ring-accent-pink/50 border-transparent transition-all duration-300 appearance-none">
-                        {predefinedStyles.map(style => <option key={style} value={style}>{style}</option>)}
-                        <option value="Other">Other (Specify)</option>
-                    </select>
-                </div>
-                {selectValue === 'Other' && (
-                    <InputField id="customVideoStyle" label="Custom Style" value={videoStyle} onChange={handleCustomStyleChange} placeholder="e.g., Low-poly, Impressionistic" />
-                )}
-            </div>
-        )}
-        {activeStep === 3 && (
-            <div className="space-y-6">
-                <h2 className="text-2xl font-bold font-display text-text-light">3. Configure Video Output</h2>
-                <div>
-                    <label htmlFor="numPrompts" className="block text-sm font-medium text-text-medium mb-2">Number of Prompts</label>
-                    <input
-                        type="number"
-                        id="numPrompts"
-                        name="numPrompts"
-                        value={numPrompts}
-                        onChange={(e) => setNumPrompts(Math.max(1, parseInt(e.target.value, 10)) || 1)}
-                        min="1"
-                        className="w-full bg-dark-input rounded-xl shadow-soft-inset py-3 px-4 text-text-light focus:outline-none focus:ring-2 focus:ring-accent-pink/50 border-transparent transition-all duration-300"
-                    />
-                    <p className="text-xs text-text-medium mt-2 text-right">
-                      Total Video Length: {minutes} minute{minutes !== 1 ? 's' : ''} {seconds} second{seconds !== 1 ? 's' : ''}
-                    </p>
-                </div>
-            </div>
-        )}
-        {activeStep === 4 && (
-             <div className="space-y-6">
-                <h2 className="text-2xl font-bold font-display text-text-light">4. Generate Voiceover</h2>
-                <>
-                    <div>
-                        <label className="block text-sm font-medium text-text-medium mb-2">Voiceover Language</label>
-                        <div className="flex flex-wrap bg-dark-input p-1 rounded-full shadow-soft-inset gap-1">
-                            <TabButton active={voiceoverLanguage === 'English'} onClick={() => setVoiceoverLanguage('English')}>English</TabButton>
-                            <TabButton active={voiceoverLanguage === 'Pure Hindi'} onClick={() => setVoiceoverLanguage('Pure Hindi')}>Hindi</TabButton>
-                            <TabButton active={voiceoverLanguage === 'Pure Urdu'} onClick={() => setVoiceoverLanguage('Pure Urdu')}>Urdu</TabButton>
-                            <TabButton active={voiceoverLanguage === 'Roman Urdu'} onClick={() => setVoiceoverLanguage('Roman Urdu')}>Roman Urdu</TabButton>
-                        </div>
-                    </div>
-                    
-                    <p className="text-text-medium">Generate a single, synchronized voiceover script, or write your own.</p>
-                    <button
-                        type="button"
-                        onClick={onGenerateVoiceover}
-                        disabled={isVoiceoverLoading || !result || !result.storyScript}
-                        className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-input shadow-soft-outset hover:text-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
-                        title={!result?.storyScript ? "Generate a story first" : "Generate synchronized voiceover script"}
-                    >
-                        {isVoiceoverLoading ? (
-                            <><LoadingSpinnerIcon /> Generating Script...</>
-                        ) : (
-                            <><MicIcon className="w-4 h-4" /> Generate Voiceover Script</>
-                        )}
-                    </button>
-                    
-                    <div className="relative">
-                        <TextareaField
-                            id="voiceover-script"
-                            label="Voiceover Script"
-                            value={editableVoiceoverScript}
-                            onChange={(e) => setEditableVoiceoverScript(e.target.value)}
-                            rows={8}
-                            placeholder="Your voiceover script will appear here..."
-                            maxLength={VOICEOVER_CHAR_LIMIT}
-                        />
-                         <button
-                            type="button"
-                            onClick={onEnhanceScript}
-                            disabled={isEnhancingScript || !editableVoiceoverScript.trim()}
-                            className="absolute bottom-4 right-4 p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent-pink transition disabled:opacity-50"
-                            title="Auto Enhance Script"
-                        >
-                            {isEnhancingScript ? <LoadingSpinnerIcon /> : <SparklesIcon className="w-5 h-5" />}
-                        </button>
-                    </div>
-
-                    <p className={`text-xs text-right mt-1 px-2 ${editableVoiceoverScript.length > VOICEOVER_CHAR_LIMIT ? 'text-accent-pink' : 'text-text-medium'}`}>
-                        {editableVoiceoverScript.length} / {VOICEOVER_CHAR_LIMIT} characters
-                    </p>
-                    
-                    <div>
-                        <label htmlFor="voiceSelect" className="block text-sm font-medium text-text-medium mb-2">Character Voice</label>
-                        <div className="flex items-center gap-2">
-                            <select id="voiceSelect" value={selectedVoice} onChange={(e) => setSelectedVoice(e.target.value)} className="w-full bg-dark-input rounded-xl shadow-soft-inset py-3 px-4 text-text-light focus:outline-none focus:ring-2 focus:ring-accent-pink/50 border-transparent transition-all duration-300 appearance-none">
-                                {voices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                            </select>
-                            <button
-                                type="button"
-                                onClick={handlePlaySampleVoice}
-                                disabled={!!sampleLoadingVoice}
-                                className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent-pink transition disabled:opacity-50"
-                                title={`Play sample for ${voices.find(v => v.id === selectedVoice)?.name}`}
-                            >
-                                {sampleLoadingVoice === selectedVoice ? <LoadingSpinnerIcon /> : <PlayIcon className="w-5 h-5" />}
-                            </button>
-                        </div>
-                    </div>
-                    <div>
-                        <label htmlFor="speedControl" className="block text-sm font-medium text-text-medium mb-2">
-                            Playback Speed: {playbackRate.toFixed(1)}x
-                        </label>
-                        <input
-                            type="range"
-                            id="speedControl"
-                            min="1.0"
-                            max="3.0"
-                            step="0.1"
-                            value={playbackRate}
-                            onChange={(e) => setPlaybackRate(parseFloat(e.target.value))}
-                            className="w-full h-2 bg-dark-input rounded-lg appearance-none cursor-pointer accent-accent-pink"
-                        />
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <button
-                            type="button"
-                            onClick={onGenerateAudio}
-                            disabled={isAudioLoading || !editableVoiceoverScript.trim() || editableVoiceoverScript.length > VOICEOVER_CHAR_LIMIT}
-                            className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-input shadow-soft-outset hover:text-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
-                        >
-                            {isAudioLoading ? (
-                                <><LoadingSpinnerIcon /> Generating Audio...</>
-                            ) : (
-                                <><MicIcon className="w-4 h-4" /> Generate Full Audio</>
-                            )}
-                        </button>
-                        {result?.voiceoverAudio && (
-                            <>
-                                <button type="button" onClick={handlePlayPause} className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-accent-pink border-2 border-accent-pink/50 hover:bg-accent-pink/10 focus:outline-none transition w-40">
-                                    {audioState === 'playing' ? (
-                                        <>
-                                            <PauseIcon className="w-4 h-4 mr-1" />
-                                            Pause
-                                        </>
-                                    ) : (
-                                        <>
-                                            <PlayIcon className="w-4 h-4 mr-1" />
-                                            {audioState === 'paused' ? 'Resume' : 'Play'}
-                                        </>
-                                    )}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleDownloadVoiceover}
-                                    className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent-pink transition"
-                                    title="Download Voiceover (.wav)"
-                                >
-                                    <DownloadIcon className="w-5 h-5" />
-                                </button>
-                            </>
-                        )}
-                    </div>
-                </>
-            </div>
-        )}
-    </div>
   );
 
   return (
     <form onSubmit={handleSubmit} className="bg-dark-card rounded-3xl p-4 shadow-soft-outset flex h-full">
-        {appStage === 'input' && (
-            <nav className="w-1/3 border-r border-white/10 pr-4 flex flex-col space-y-2">
-                {navItems.map(item => <NavItem key={item.step} {...item} />)}
-            </nav>
-        )}
+        <nav className="w-1/3 border-r border-white/10 pr-4 flex flex-col space-y-2">
+            {navItems.map(item => <NavItem key={item.step} {...item} />)}
+        </nav>
         
-        <div className={`w-full ${appStage === 'input' ? 'w-2/3 pl-4' : 'w-full'} flex flex-col`}>
-             {appStage === 'refinement' ? renderRefinementStage() : renderInputStage() }
+        <div className="w-2/3 pl-4 flex flex-col">
+            <div className="flex-grow space-y-8 overflow-y-auto p-4 -m-4">
+                {activeStep === 1 && (
+                    <div className="space-y-6">
+                        <h2 className="text-2xl font-bold font-display text-text-light">1. Define Characters & Story</h2>
+                        
+                        <div className="space-y-4">
+                            {characterProfiles.map((profile, index) => (
+                                <div key={index} className="bg-dark-input rounded-2xl p-4 shadow-soft-inset space-y-3">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-lg font-semibold text-accent">Character {index + 1}</h3>
+                                        {characterProfiles.length > 1 && (
+                                            <button type="button" onClick={() => handleRemoveCharacter(index)} className="p-2 rounded-full hover:bg-white/10 text-text-medium hover:text-accent">
+                                                <TrashIcon className="w-5 h-5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    <InputField id={`name-${index}`} name="name" label="Name" value={profile.name} onChange={(e) => handleProfileChange(index, e)} placeholder="e.g., Kaelen" />
+                                    <TextareaField id={`appearance-${index}`} name="appearance" label="Appearance Details" value={profile.appearance} onChange={(e) => handleProfileChange(index, e)} placeholder="e.g., silver hair, glowing cybernetic eye, worn leather jacket" rows={3} required />
+                                </div>
+                            ))}
+                            <button type="button" onClick={handleAddCharacter} className="w-full py-2 px-4 border-2 border-dashed border-text-medium/50 rounded-xl text-text-medium hover:text-text-light hover:border-text-medium transition-colors">
+                                + Add Another Character
+                            </button>
+                        </div>
+
+                        <div className="flex bg-dark-input p-1 rounded-full space-x-1 shadow-soft-inset">
+                            <TabButton active={storyMode === 'detail'} onClick={() => setStoryMode('detail')}>Detailed Scene</TabButton>
+                            <TabButton active={storyMode === 'quick'} onClick={() => setStoryMode('quick')}>Quick Story</TabButton>
+                        </div>
+                        {storyMode === 'detail' ? (
+                            <TextareaField id="storyScene" label="Story Scene / Plot Point" value={storyScene} placeholder="Describe the action. e.g., 'Kaelen stands on a rain-slicked rooftop at midnight...'" onChange={handleSceneChange} rows={5} required />
+                        ) : (
+                            <TextareaField id="storyTitle" label="Story Title or Description" value={storyTitle} placeholder="Provide a title or a short idea. e.g., 'The Last Dragon Rider's Gambit'" onChange={handleTitleChange} rows={5} required />
+                        )}
+                    </div>
+                )}
+                {activeStep === 2 && (
+                    <div className="space-y-6">
+                        <h2 className="text-2xl font-bold font-display text-text-light">2. Define Video Style</h2>
+                        <div>
+                            <label htmlFor="videoStyleSelect" className="block text-sm font-medium text-text-medium mb-2">Video Style</label>
+                            <select id="videoStyleSelect" value={selectValue} onChange={handleStyleSelectChange} className="w-full bg-dark-input rounded-xl shadow-soft-inset py-3 px-4 text-text-light focus:outline-none focus:ring-2 focus:ring-accent/50 border-transparent transition-all duration-300 appearance-none">
+                                {predefinedStyles.map(style => <option key={style} value={style}>{style}</option>)}
+                                <option value="Other">Other (Specify)</option>
+                            </select>
+                        </div>
+                        {selectValue === 'Other' && (
+                            <InputField id="customVideoStyle" label="Custom Style" value={videoStyle} onChange={handleCustomStyleChange} placeholder="e.g., Low-poly, Impressionistic" />
+                        )}
+                    </div>
+                )}
+                {activeStep === 3 && (
+                    <div className="space-y-6">
+                        <h2 className="text-2xl font-bold font-display text-text-light">3. Configure Video Output</h2>
+                        <div className="flex bg-dark-input p-1 rounded-full space-x-1 shadow-soft-inset">
+                            <TabButton active={inputMode === 'minutes'} onClick={() => setInputMode('minutes')}>By Minutes</TabButton>
+                            <TabButton active={inputMode === 'count'} onClick={() => setInputMode('count')}>By Prompts</TabButton>
+                        </div>
+
+                        {inputMode === 'minutes' ? (
+                            <div>
+                                <InputField
+                                    label="Video Length (minutes)"
+                                    id="videoLength"
+                                    type="number"
+                                    value={videoLengthMinutes}
+                                    onChange={(e) => setVideoLengthMinutes(parseFloat(e.target.value))}
+                                    min="0.1"
+                                    step="0.1"
+                                    placeholder="e.g., 1.5"
+                                />
+                                <p className="text-xs text-text-medium mt-2 text-right">Generates approx. {numPrompts} prompts.</p>
+                            </div>
+                        ) : (
+                            <div>
+                                <InputField
+                                    label="Number of Prompts"
+                                    id="numPrompts"
+                                    type="number"
+                                    value={numPrompts}
+                                    onChange={(e) => setNumPrompts(parseInt(e.target.value, 10))}
+                                    min="1"
+                                    step="1"
+                                    placeholder="e.g., 8"
+                                />
+                                <p className="text-xs text-text-medium mt-2 text-right">Equals a video length of approx. {videoLengthMinutes.toFixed(1)} minutes.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+                {activeStep === 4 && (
+                    <div className="space-y-6">
+                        <h2 className="text-2xl font-bold font-display text-text-light">4. Generate Voiceover</h2>
+                        <>
+                            <p className="text-text-medium">Generate a voiceover script, or write your own.</p>
+                            <button
+                                type="button"
+                                onClick={onGenerateVoiceover}
+                                disabled={isVoiceoverLoading || !result || !result.storyScript}
+                                className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-input shadow-soft-outset hover:text-accent focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                title={!result?.storyScript ? "Generate a story first" : "Generate voiceover script"}
+                            >
+                                {isVoiceoverLoading ? (
+                                    <><LoadingSpinnerIcon /> Generating Script...</>
+                                ) : (
+                                    <><MicIcon className="w-4 h-4" /> Generate Voiceover Script</>
+                                )}
+                            </button>
+                            
+                            <div className="relative">
+                                <TextareaField
+                                    id="voiceover-script"
+                                    label="Voiceover Script"
+                                    value={editableVoiceoverScript}
+                                    onChange={(e) => setEditableVoiceoverScript(e.target.value)}
+                                    rows={8}
+                                    placeholder="Your voiceover script will appear here..."
+                                    maxLength={VOICEOVER_CHAR_LIMIT}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={onEnhanceScript}
+                                    disabled={isEnhancingScript || !editableVoiceoverScript.trim()}
+                                    className="absolute bottom-4 right-4 p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition disabled:opacity-50"
+                                    title="Auto Enhance Script"
+                                >
+                                    {isEnhancingScript ? <LoadingSpinnerIcon /> : <SparklesIcon className="w-5 h-5" />}
+                                </button>
+                            </div>
+
+                            <p className={`text-xs text-right mt-1 px-2 ${editableVoiceoverScript.length > VOICEOVER_CHAR_LIMIT ? 'text-accent' : 'text-text-medium'}`}>
+                                {editableVoiceoverScript.length} / {VOICEOVER_CHAR_LIMIT} characters
+                            </p>
+                            
+                            <div>
+                                <label htmlFor="languageSelect" className="block text-sm font-medium text-text-medium mb-2">Voiceover Language</label>
+                                <select id="languageSelect" value={voiceoverLanguage} onChange={(e) => setVoiceoverLanguage(e.target.value)} className="w-full bg-dark-input rounded-xl shadow-soft-inset py-3 px-4 text-text-light focus:outline-none focus:ring-2 focus:ring-accent/50 border-transparent transition-all duration-300 appearance-none">
+                                    <option value="English">English</option>
+                                    <option value="Hindi">Hindi</option>
+                                    <option value="Urdu">Urdu</option>
+                                    <option value="Roman Urdu">Roman Urdu</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label htmlFor="voiceSelect" className="block text-sm font-medium text-text-medium mb-2">Character Voice</label>
+                                <div className="flex items-center gap-2">
+                                    <select id="voiceSelect" value={selectedVoice} onChange={(e) => setSelectedVoice(e.target.value)} className="w-full bg-dark-input rounded-xl shadow-soft-inset py-3 px-4 text-text-light focus:outline-none focus:ring-2 focus:ring-accent/50 border-transparent transition-all duration-300 appearance-none">
+                                        {voices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        onClick={handlePlaySampleVoice}
+                                        disabled={!!sampleLoadingVoice}
+                                        className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition disabled:opacity-50"
+                                        title={`Play sample for ${voices.find(v => v.id === selectedVoice)?.name}`}
+                                    >
+                                        {sampleLoadingVoice === selectedVoice ? <LoadingSpinnerIcon /> : <PlayIcon className="w-5 h-5" />}
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label htmlFor="speedControl" className="block text-sm font-medium text-text-medium mb-2">
+                                    Playback Speed: {playbackRate.toFixed(1)}x
+                                </label>
+                                <input
+                                    type="range"
+                                    id="speedControl"
+                                    min="1.0"
+                                    max="3.0"
+                                    step="0.1"
+                                    value={playbackRate}
+                                    onChange={(e) => setPlaybackRate(parseFloat(e.target.value))}
+                                    className="w-full h-2 bg-dark-input rounded-lg appearance-none cursor-pointer accent-accent"
+                                />
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <button
+                                    type="button"
+                                    onClick={onGenerateAudio}
+                                    disabled={isAudioLoading || !editableVoiceoverScript.trim() || editableVoiceoverScript.length > VOICEOVER_CHAR_LIMIT}
+                                    className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-input shadow-soft-outset hover:text-accent focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                >
+                                    {isAudioLoading ? (
+                                        <><LoadingSpinnerIcon /> Generating Audio...</>
+                                    ) : (
+                                        <><MicIcon className="w-4 h-4" /> Generate Full Audio</>
+                                    )}
+                                </button>
+                                {result?.voiceoverAudio && (
+                                    <>
+                                        <button type="button" onClick={handlePlayPause} className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-accent border-2 border-accent/50 hover:bg-accent/10 focus:outline-none transition w-40">
+                                            {audioState === 'playing' ? (
+                                                <>
+                                                    <PauseIcon className="w-4 h-4 mr-1" />
+                                                    Pause
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <PlayIcon className="w-4 h-4 mr-1" />
+                                                    {audioState === 'paused' ? 'Resume' : 'Play'}
+                                                </>
+                                            )}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleDownloadVoiceover}
+                                            className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition"
+                                            title="Download Voiceover (.wav)"
+                                        >
+                                            <DownloadIcon className="w-5 h-5" />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </>
+                    </div>
+                )}
+            </div>
             
             <div className="pt-4 flex-shrink-0">
                 <button
                     type="submit"
                     disabled={isSubmitDisabled}
-                    className="w-full flex justify-center items-center py-4 px-4 border-transparent rounded-2xl shadow-lg text-lg font-bold text-white bg-accent-pink hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent-pink disabled:bg-accent-pink/40 disabled:cursor-not-allowed transition-all duration-300 shadow-accent-pink/40 hover:shadow-accent-pink/60 hover:scale-105 transform active:scale-100"
+                    className="w-full flex justify-center items-center py-4 px-4 border-transparent rounded-2xl shadow-lg text-lg font-bold text-dark-bg bg-accent hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:bg-accent/40 disabled:cursor-not-allowed transition-all duration-300 shadow-accent/40 hover:shadow-accent/60 hover:scale-105 transform active:scale-100"
                 >
                     {isLoading ? (
                     <>

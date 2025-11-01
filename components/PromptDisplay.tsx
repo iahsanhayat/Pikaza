@@ -31,7 +31,7 @@ const LoadingSkeleton: React.FC = () => (
 
 const InitialState: React.FC = () => (
     <div className="text-center text-text-medium flex flex-col items-center justify-center h-full">
-        <SparklesIcon className="w-16 h-16 mb-4 text-accent-pink" />
+        <SparklesIcon className="w-16 h-16 mb-4 text-accent" />
         <h3 className="text-xl font-bold font-display text-text-light">Your AI Storyboard Awaits</h3>
         <p className="mt-2 max-w-sm">Fill in the details, then click "Generate Story & Prompts" to see the magic happen here.</p>
     </div>
@@ -39,7 +39,7 @@ const InitialState: React.FC = () => (
 
 const renderMarkdown = (markdown: string) => {
     const html = markdown
-        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-accent-pink font-semibold">$1</strong>') // Bold
+        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-accent font-semibold">$1</strong>') // Bold
         .replace(/### (.*?)\n/g, '<h3 class="text-xl font-display font-bold mt-4 mb-2 text-text-light">$1</h3>') // h3
         .replace(/## (.*?)\n/g, '<h2 class="text-2xl font-display font-bold mt-8 mb-4 border-b border-white/10 pb-2 text-text-light">$1</h2>') // h2
         .replace(/\n/g, '<br />');
@@ -47,15 +47,8 @@ const renderMarkdown = (markdown: string) => {
 }
 
 export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading, error, isThumbnailLoading, onGenerateThumbnail, isThumbnailImageLoading, onGenerateThumbnailImage }) => {
-  const [isCopied, setIsCopied] = useState(false);
   const [isThumbnailPromptCopied, setIsThumbnailPromptCopied] = useState(false);
-
-  useEffect(() => {
-    if (isCopied) {
-      const timer = setTimeout(() => setIsCopied(false), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [isCopied]);
+  const [isPromptsCopied, setIsPromptsCopied] = useState(false);
 
   useEffect(() => {
     if (isThumbnailPromptCopied) {
@@ -63,14 +56,13 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
       return () => clearTimeout(timer);
     }
   }, [isThumbnailPromptCopied]);
-
-  const handleCopy = () => {
-    if (result && result.prompts.length > 0) {
-      const promptsText = result.prompts.map(p => JSON.stringify(p)).join('\n');
-      navigator.clipboard.writeText(promptsText);
-      setIsCopied(true);
+  
+  useEffect(() => {
+    if (isPromptsCopied) {
+      const timer = setTimeout(() => setIsPromptsCopied(false), 2000);
+      return () => clearTimeout(timer);
     }
-  };
+  }, [isPromptsCopied]);
 
   const handleCopyThumbnailPrompt = () => {
     if (result?.thumbnailPrompt) {
@@ -78,21 +70,14 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
         setIsThumbnailPromptCopied(true);
     }
   };
-
-  const handleDownload = () => {
-    if (result && result.prompts.length > 0) {
-        const fileContent = result.prompts.map(p => JSON.stringify(p)).join('\r\n');
-        const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'story_prompts.txt';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+  
+  const handleCopyAllPrompts = () => {
+    if (result?.prompts) {
+      const allPrompts = result.prompts.map(p => p.prompt).join('\n\n');
+      navigator.clipboard.writeText(allPrompts);
+      setIsPromptsCopied(true);
     }
-  }
+  };
 
   const handleDownloadCharacterSheet = () => {
     if (result?.characterSheet) {
@@ -121,6 +106,18 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
         URL.revokeObjectURL(url);
     }
   }
+  
+  const handleDownloadPrompts = () => {
+    if (result?.prompts) {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(result.prompts, null, 2));
+      const link = document.createElement('a');
+      link.href = dataStr;
+      link.download = "prompts.json";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
 
   const handleDownloadThumbnailImage = () => {
     if (result?.thumbnailImage) {
@@ -149,7 +146,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                         <h2 className="text-2xl font-display font-bold text-text-light">Character Sheet</h2>
                         <button
                             onClick={handleDownloadCharacterSheet}
-                            className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent-pink transition"
+                            className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition"
                             aria-label="Download character sheet"
                             title="Download Character Sheet (.md)"
                         >
@@ -168,7 +165,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                         <h2 className="text-2xl font-display font-bold text-text-light">Story Script</h2>
                          <button
                             onClick={handleDownloadStoryScript}
-                            className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent-pink transition"
+                            className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition"
                             aria-label="Download story script"
                             title="Download Story Script (.txt)"
                         >
@@ -179,6 +176,38 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                         {renderMarkdown(result.storyScript)}
                     </div>
                 </div>
+            )}
+
+            {result.prompts && result.prompts.length > 0 && (
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-display font-bold text-text-light">Video Prompts ({result.prompts.length})</h2>
+                    <div className="flex items-center gap-2">
+                         <button
+                            onClick={handleCopyAllPrompts}
+                            className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition"
+                            title="Copy all prompts"
+                        >
+                            {isPromptsCopied ? <CheckIcon className="w-5 h-5 text-green-400" /> : <CopyIcon className="w-5 h-5" />}
+                        </button>
+                        <button
+                            onClick={handleDownloadPrompts}
+                            className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition"
+                            title="Download Prompts (.json)"
+                        >
+                            <DownloadIcon className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
+                <div className="space-y-4 max-h-[40vh] overflow-y-auto p-1 -m-1 custom-scrollbar">
+                    {result.prompts.map((p) => (
+                        <div key={p.scene_number} className="p-4 bg-dark-input rounded-xl shadow-soft-inset">
+                            <p className="text-sm text-accent font-semibold">Scene {p.scene_number} ({p.start_time_seconds}s - {p.end_time_seconds}s)</p>
+                            <p className="text-text-light mt-2 text-sm leading-relaxed">{p.prompt}</p>
+                        </div>
+                    ))}
+                </div>
+              </div>
             )}
             
             {result.characterSheet && (
@@ -196,7 +225,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                                 <button
                                     type="button"
                                     onClick={handleDownloadThumbnailImage}
-                                    className="flex items-center justify-center w-full gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent-pink focus:outline-none transition"
+                                    className="flex items-center justify-center w-full gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent focus:outline-none transition"
                                 >
                                     <DownloadIcon className="w-5 h-5" /> Download Image
                                 </button>
@@ -213,7 +242,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                                 </pre>
                                 <button
                                     onClick={handleCopyThumbnailPrompt}
-                                    className="absolute top-2 right-2 p-2 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent-pink transition opacity-0 group-hover:opacity-100"
+                                    className="absolute top-2 right-2 p-2 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition opacity-0 group-hover:opacity-100"
                                     aria-label="Copy thumbnail prompt"
                                     title="Copy prompt"
                                 >
@@ -226,7 +255,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                                     type="button"
                                     onClick={onGenerateThumbnail}
                                     disabled={isThumbnailLoading}
-                                    className="flex w-full sm:w-auto items-center justify-center mx-auto gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                    className="flex w-full sm:w-auto items-center justify-center mx-auto gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
                                     <SparklesIcon className="w-5 h-5" /> Generate Prompt
                                 </button>
@@ -234,30 +263,13 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                                     type="button"
                                     onClick={onGenerateThumbnailImage}
                                     disabled={isThumbnailImageLoading}
-                                    className="flex w-full sm:w-auto items-center justify-center mx-auto gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-accent-pink/80 shadow-soft-outset hover:bg-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                    className="flex w-full sm:w-auto items-center justify-center mx-auto gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-dark-bg bg-accent shadow-soft-outset hover:opacity-90 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
                                     <PhotoIcon className="w-5 h-5" /> Generate 4K Image
                                 </button>
                             </div>
                         )}
                     </div>
-                </div>
-            )}
-
-            {result.prompts.length > 0 && (
-                <div>
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-2xl font-display font-bold text-text-light">JSON Prompts</h2>
-                    </div>
-                    <ol className="list-decimal pl-5 space-y-4 mt-4">
-                        {result.prompts.map((p, i) => (
-                             <li key={i} className="pl-2">
-                                <pre className="whitespace-pre-wrap bg-dark-bg p-3 rounded-lg text-xs font-mono text-text-light">
-                                    <code>{JSON.stringify(p)}</code>
-                                </pre>
-                             </li>
-                        ))}
-                    </ol>
                 </div>
             )}
         </div>
@@ -271,26 +283,6 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
         <div className="flex-grow overflow-y-auto pr-4 -mr-4">
             {renderContent()}
         </div>
-        {result && !isLoading && result.prompts.length > 0 && (
-            <div className="absolute top-6 right-6 flex flex-col gap-4">
-                <button
-                    onClick={handleCopy}
-                    className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent-pink transition"
-                    aria-label="Copy prompts to clipboard"
-                    title="Copy prompts"
-                >
-                    {isCopied ? <CheckIcon className="w-5 h-5 text-green-400" /> : <CopyIcon className="w-5 h-5" />}
-                </button>
-                <button
-                    onClick={handleDownload}
-                    className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent-pink transition"
-                    aria-label="Download prompts as a .txt file"
-                    title="Download prompts"
-                >
-                    <DownloadIcon className="w-5 h-5" />
-                </button>
-            </div>
-        )}
     </div>
   );
 };
