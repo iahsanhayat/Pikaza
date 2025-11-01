@@ -144,7 +144,8 @@ const App: React.FC = () => {
       const thumbnailPrompt = await generateThumbnailPrompt(
         generatedResult.characterSheet, 
         generatedResult.storyScript,
-        videoStyle
+        videoStyle,
+        storyTitle
       );
       setGeneratedResult(prev => prev ? { ...prev, thumbnailPrompt } : null);
     } catch (e) {
@@ -153,7 +154,7 @@ const App: React.FC = () => {
     } finally {
       setIsThumbnailLoading(false);
     }
-  }, [generatedResult, videoStyle]);
+  }, [generatedResult, videoStyle, storyTitle]);
 
   const handleGenerateThumbnailImage = useCallback(async () => {
     if (!generatedResult?.characterSheet) return;
@@ -164,7 +165,8 @@ const App: React.FC = () => {
       const thumbnailImage = await generateThumbnailImage(
         generatedResult.characterSheet, 
         generatedResult.storyScript,
-        videoStyle
+        videoStyle,
+        storyTitle
       );
       setGeneratedResult(prev => prev ? { ...prev, thumbnailImage } : null);
     } catch (e) {
@@ -173,7 +175,7 @@ const App: React.FC = () => {
     } finally {
       setIsThumbnailImageLoading(false);
     }
-  }, [generatedResult, videoStyle]);
+  }, [generatedResult, videoStyle, storyTitle]);
 
   return (
     <div className="min-h-screen bg-dark-bg text-text-light flex flex-col">

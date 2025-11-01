@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, GenerateContentResponse, HarmCategory, HarmBlockThreshold, Modality } from "@google/genai";
-import type { CharacterProfile, ScenePrompt } from './types';
+import type { CharacterProfile, ScenePrompt } from '../types';
 
 // This global instance is used for operations not requiring user-specific API keys.
 const aiGlobal = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -67,7 +67,7 @@ export async function generateStoryAndPrompts(
       },
       storyScript: {
         type: Type.STRING,
-        description: "The full story script, written out as a narrative. This should only be generated in 'quick' mode."
+        description: "The full story script, written out as a narrative."
       },
       prompts: {
         type: Type.ARRAY,
@@ -84,7 +84,7 @@ export async function generateStoryAndPrompts(
         }
       }
     },
-    required: ['characterSheet', 'prompts']
+    required: ['characterSheet', 'storyScript', 'prompts']
   };
   
   const characterDetails = characters.map(c => `- Name: ${c.name || 'Unnamed'}\n  - Key Physical Appearance Details: ${c.appearance}`).join('\n');
@@ -119,12 +119,13 @@ export async function generateStoryAndPrompts(
     **Mode: Detailed Scene**
     - Scene Description: "${sceneOrTitle}"
     1.  First, create a highly detailed, descriptive "Character Sheet" for **EACH** character based on the details provided. This sheet is crucial for visual consistency. Use specific keywords for an AI image generator. Break it down into logical categories (e.g., 'Face', 'Hair', 'Attire'). Combine all character sheets into a single markdown string under a main "Character Sheets" heading.
-    2.  Then, based on the scene description, generate ${numPrompts} distinct, sequential JSON prompt objects that depict the unfolding action within that scene. Imagine it as a short storyboard.
-    3.  **CRITICAL RULE for each JSON object:**
+    2.  Then, write a short narrative story script that describes what happens in this scene. The story should be detailed enough to be broken into ${numPrompts} distinct scenes.
+    3.  Then, based on the story you just wrote, generate ${numPrompts} distinct, sequential JSON prompt objects that depict the unfolding action within that scene. Imagine it as a short storyboard.
+    4.  **CRITICAL RULE for each JSON object:**
         -   \`scene_number\`: The chronological order of the scene, starting from 1.
         -   \`start_time_seconds\` and \`end_time_seconds\`: Calculate these based on an 8-second duration for each scene (e.g., scene 1 is 0-8s, scene 2 is 8-16s, etc.).
         -   \`prompt\`: This string MUST begin with the video style: "${videoStyle}". Then, for **ANY** character mentioned by name, you **MUST** include their detailed appearance from their character sheet to maintain consistency. This should be followed by a description of the action, environment, lighting, and mood. The prompt string MUST end with "--ar 16:9".
-    4.  Populate the 'characterSheet' and 'prompts' fields in the JSON output. Do not generate a 'storyScript'.
+    5.  Populate the 'characterSheet', 'storyScript', and 'prompts' fields in the JSON output.
     `}
   `;
 
@@ -150,10 +151,6 @@ export async function generateStoryAndPrompts(
     }
 
     const result = JSON.parse(jsonText.trim());
-
-    if(mode === 'detail' && result.storyScript) {
-        delete result.storyScript;
-    }
     
     return result;
 
@@ -292,29 +289,38 @@ export async function generateAudioFromScript(script: string, voiceName: string)
     }
 }
 
-export async function generateThumbnailPrompt(characterSheet: string, storyScript: string | undefined, videoStyle: string): Promise<string> {
+export async function generateThumbnailPrompt(characterSheet: string, storyScript: string | undefined, videoStyle: string, storyTitle: string): Promise<string> {
     const prompt = `
-        Based on the following character sheet and story, create a single, highly detailed, and visually captivating prompt for an AI image generator to create a YouTube video thumbnail.
+        You are an expert at creating viral YouTube thumbnails. Your task is to create a single, highly detailed, and visually captivating prompt for an AI image generator. The thumbnail should be **scroll-stopping**, **eye-catching**, and generate high click-through rates.
 
         **Instructions for the Prompt:**
         1.  **Style:** The prompt MUST begin with the specified style: "${videoStyle}".
-        2.  **Character Consistency:** For any character mentioned, you MUST incorporate their specific, detailed appearance from the character sheet to ensure consistency.
-        3.  **Focus & Composition:** The thumbnail must feature the main character(s) prominently in a dynamic or emotionally resonant pose. Describe a compelling scene that captures the essence of the story. Use strong keywords for composition, lighting, and mood (e.g., "dramatic lighting," "cinematic composition," "action shot," "intense close-up", "rule of thirds").
-        4.  **Clarity & Detail:** Be extremely descriptive about every element: the characters' expressions, clothing textures, background details, weather, time of day, and overall atmosphere. The goal is to leave no room for ambiguity for the AI image generator.
-        5.  **Aspect Ratio:** The prompt MUST end with "--ar 16:9" to ensure the correct thumbnail dimensions.
-        6.  **Output:** Your entire output should be ONLY the final image prompt text, with no extra explanations, labels, or quotation marks.
+        2.  **Character Focus:** The thumbnail MUST feature the main character(s) prominently. Their faces should be clearly visible and expressive, conveying strong emotion (e.g., shock, joy, determination, fear). Use a close-up or medium shot. Incorporate their specific, detailed appearance from the character sheet for consistency.
+        3.  **High Drama & Intrigue:** Describe a compelling, action-packed, or emotionally charged moment from the story. Create a sense of mystery or conflict that makes the viewer want to know what happens next.
+        4.  **Vibrant & Dynamic Composition:** Use keywords for a dynamic and visually appealing composition. Emphasize vibrant colors, dramatic lighting (e.g., "god rays," "neon glow," "rim lighting"), and a clear focal point. Think "cinematic," "epic," "intense."
+        5.  **Title Integration (Optional but Recommended):** If a story title is provided, subtly hint at it visually. Do not write text on the image, but use elements that represent the title. For example, for 'The Last Dragon Rider', show a character with a dragon.
+        6.  **Clarity & Detail:** Be extremely descriptive about every element to leave no room for ambiguity for the AI.
+        7.  **Aspect Ratio:** The prompt MUST end with "--ar 16:9".
+        8.  **Output:** Your entire output should be ONLY the final image prompt text, with no extra explanations or labels.
 
         **Character Sheet:**
         ---
         ${characterSheet}
         ---
 
-        **Story:**
+        ${storyTitle ? `
+        **Story Title:**
+        ---
+        ${storyTitle}
+        ---
+        ` : ''}
+
+        **Story Context:**
         ---
         ${storyScript || 'A story based on the character sheet.'}
         ---
 
-        **Image Prompt:**
+        **Viral Thumbnail Image Prompt:**
     `;
 
     try {
@@ -341,9 +347,9 @@ export async function generateThumbnailPrompt(characterSheet: string, storyScrip
     }
 }
 
-export async function generateThumbnailImage(characterSheet: string, storyScript: string | undefined, videoStyle: string): Promise<string> {
+export async function generateThumbnailImage(characterSheet: string, storyScript: string | undefined, videoStyle: string, storyTitle: string): Promise<string> {
     try {
-        const prompt = await generateThumbnailPrompt(characterSheet, storyScript, videoStyle);
+        const prompt = await generateThumbnailPrompt(characterSheet, storyScript, videoStyle, storyTitle);
 
         const response = await aiGlobal.models.generateImages({
             model: 'imagen-4.0-generate-001',
