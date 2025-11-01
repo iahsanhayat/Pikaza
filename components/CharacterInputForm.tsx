@@ -206,7 +206,6 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   const [sampleLoadingVoice, setSampleLoadingVoice] = useState<string | null>(null);
   const VOICEOVER_CHAR_LIMIT = 10000;
 
-  const [isPlaying, setIsPlaying] = useState(false);
   const [audioState, setAudioState] = useState<'paused' | 'playing' | 'stopped'>('stopped');
   const audioSourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
@@ -310,7 +309,7 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
       }
     };
   
-    const offset = pauseTimeRef.current % audioBufferRef.current.duration;
+    const offset = pauseTimeRef.current % (audioBufferRef.current?.duration || 1);
     source.start(0, offset);
   
     audioSourceNodeRef.current = source;
@@ -388,6 +387,10 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   const isRefinementComplete = characterProfiles.some(p => p.appearance.trim() !== '');
   const isSubmitDisabled = isLoading || (appStage === 'input' && (storyMode === 'detail' ? !storyScene : !storyTitle)) || (appStage === 'refinement' && !isRefinementComplete);
   const submitButtonText = appStage === 'input' ? 'Generate Story & Characters' : 'Finalize & Generate Prompts';
+
+  const totalSeconds = numPrompts * 8;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
 
 
   const NavItem: React.FC<{ step: number; title: string; disabled?: boolean }> = ({ step, title, disabled = false }) => (
@@ -482,6 +485,9 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                         min="1"
                         className="w-full bg-dark-input rounded-xl shadow-soft-inset py-3 px-4 text-text-light focus:outline-none focus:ring-2 focus:ring-accent-pink/50 border-transparent transition-all duration-300"
                     />
+                    <p className="text-xs text-text-medium mt-2 text-right">
+                      Total Video Length: {minutes} minute{minutes !== 1 ? 's' : ''} {seconds} second{seconds !== 1 ? 's' : ''}
+                    </p>
                 </div>
             </div>
         )}
@@ -498,51 +504,47 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                             <TabButton active={voiceoverLanguage === 'Roman Urdu'} onClick={() => setVoiceoverLanguage('Roman Urdu')}>Roman Urdu</TabButton>
                         </div>
                     </div>
-                    <div>
-                        <p className="text-text-medium mb-4">You can generate a script from your story, or paste your own below.</p>
-                        <div className="flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={onGenerateVoiceover}
-                                disabled={isVoiceoverLoading || !result}
-                                className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-input shadow-soft-outset hover:text-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
-                                title={!result ? "Generate a story or scene first to enable this feature" : "Convert story/scene to voiceover script"}
-                            >
-                                {isVoiceoverLoading ? (
-                                    <><LoadingSpinnerIcon /> Converting...</>
-                                ) : (
-                                    <><MicIcon className="w-4 h-4" /> Convert to Voiceover Script</>
-                                )}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={onEnhanceScript}
-                                disabled={isEnhancingScript || !editableVoiceoverScript.trim()}
-                                className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-input shadow-soft-outset hover:text-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
-                                title="Automatically add pauses and expressions to the script"
-                            >
-                                {isEnhancingScript ? (
-                                    <><LoadingSpinnerIcon /> Enhancing...</>
-                                ) : (
-                                    <><SparklesIcon className="w-4 h-4" /> Auto Enhance Script</>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                    <div>
+                    
+                    <p className="text-text-medium">Generate a single, synchronized voiceover script, or write your own.</p>
+                    <button
+                        type="button"
+                        onClick={onGenerateVoiceover}
+                        disabled={isVoiceoverLoading || !result || !result.storyScript}
+                        className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-input shadow-soft-outset hover:text-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
+                        title={!result?.storyScript ? "Generate a story first" : "Generate synchronized voiceover script"}
+                    >
+                        {isVoiceoverLoading ? (
+                            <><LoadingSpinnerIcon /> Generating Script...</>
+                        ) : (
+                            <><MicIcon className="w-4 h-4" /> Generate Voiceover Script</>
+                        )}
+                    </button>
+                    
+                    <div className="relative">
                         <TextareaField
-                            id="voiceoverScript"
+                            id="voiceover-script"
                             label="Voiceover Script"
                             value={editableVoiceoverScript}
                             onChange={(e) => setEditableVoiceoverScript(e.target.value)}
-                            rows={6}
-                            placeholder="Paste your script here, or click 'Convert' above to generate one."
+                            rows={8}
+                            placeholder="Your voiceover script will appear here..."
                             maxLength={VOICEOVER_CHAR_LIMIT}
                         />
-                        <p className={`text-xs text-right mt-1 px-2 ${editableVoiceoverScript.length > VOICEOVER_CHAR_LIMIT ? 'text-accent-pink' : 'text-text-medium'}`}>
-                            {editableVoiceoverScript.length} / {VOICEOVER_CHAR_LIMIT} characters
-                        </p>
+                         <button
+                            type="button"
+                            onClick={onEnhanceScript}
+                            disabled={isEnhancingScript || !editableVoiceoverScript.trim()}
+                            className="absolute bottom-4 right-4 p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent-pink transition disabled:opacity-50"
+                            title="Auto Enhance Script"
+                        >
+                            {isEnhancingScript ? <LoadingSpinnerIcon /> : <SparklesIcon className="w-5 h-5" />}
+                        </button>
                     </div>
+
+                    <p className={`text-xs text-right mt-1 px-2 ${editableVoiceoverScript.length > VOICEOVER_CHAR_LIMIT ? 'text-accent-pink' : 'text-text-medium'}`}>
+                        {editableVoiceoverScript.length} / {VOICEOVER_CHAR_LIMIT} characters
+                    </p>
+                    
                     <div>
                         <label htmlFor="voiceSelect" className="block text-sm font-medium text-text-medium mb-2">Character Voice</label>
                         <div className="flex items-center gap-2">
@@ -576,7 +578,7 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                         />
                     </div>
                     <div className="flex items-center gap-4">
-                            <button
+                        <button
                             type="button"
                             onClick={onGenerateAudio}
                             disabled={isAudioLoading || !editableVoiceoverScript.trim() || editableVoiceoverScript.length > VOICEOVER_CHAR_LIMIT}
@@ -585,7 +587,7 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                             {isAudioLoading ? (
                                 <><LoadingSpinnerIcon /> Generating Audio...</>
                             ) : (
-                                <><MicIcon className="w-4 h-4" /> Generate Audio</>
+                                <><MicIcon className="w-4 h-4" /> Generate Full Audio</>
                             )}
                         </button>
                         {result?.voiceoverAudio && (

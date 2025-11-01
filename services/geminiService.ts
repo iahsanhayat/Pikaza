@@ -88,7 +88,7 @@ export async function generateStoryAndExtractCharacters(options: GenerateStoryOp
         ${storyPrompt}
 
         **Instructions:**
-        1. Write the story and place it in the \`storyScript\` field.
+        1. Write the story and place it in the \`storyScript\` field. **CRITICAL RULE: In the story, you MUST always use a character's full name. DO NOT use pronouns (like he, she, they, him, her) to refer to them.** This is essential for consistency.
         2. After writing the story, identify every character. For each character, extract a brief, one-sentence description based *only* on what is written in the story.
         3. Place the character information in the \`characters\` array.
         4. Return a single JSON object that conforms to the provided schema.
@@ -174,7 +174,7 @@ export async function generateFinalAssets(
     2.  Next, read the **Full Story Script** and break it down into exactly ${numPrompts} chronological scenes. For each scene, write one detailed JSON prompt object.
     3.  **CRITICAL RULE for each JSON prompt object:**
         -   \`scene_number\`: The chronological order of the scene, starting from 1.
-        -   \`prompt\`: This string MUST be a single, detailed, and self-contained line of text for an AI image generator. It MUST begin with the video style: "${videoStyle}". Then, for ANY character mentioned by name, you MUST inject their complete, detailed appearance from the **Character Sheet** you just created to ensure visual consistency. Follow this with a rich description of the action from the story, the character's specific emotion, the camera angle, shot type, and the environment with specific details about lighting and atmosphere. The prompt string MUST end with "--ar 16:9".
+        -   \`prompt\`: This string MUST be a single, detailed, and self-contained line of text for an AI image generator. It MUST begin with the video style: "${videoStyle}". Then, for ANY character mentioned by name, you MUST inject their complete, detailed appearance from the **Character Sheet** you just created to ensure visual consistency. When describing the action, you MUST use the character's name instead of pronouns (he, she, they). This should be followed by a rich description of the action from the story, the character's specific emotion, the camera angle, shot type, and the environment with specific details about lighting and atmosphere. The prompt string MUST end with "--ar 16:9".
     4.  Populate the 'characterSheet' and 'prompts' fields in the final JSON output.
   `;
 
@@ -210,25 +210,31 @@ export async function generateFinalAssets(
   }
 }
 
-export async function generateVoiceoverScript(sourceText: string, targetCharacterCount: number, language: string): Promise<string> {
+export async function generateVoiceoverScript(storyScript: string, numPrompts: number, language: string): Promise<string> {
   const prompt = `
-    You are a creative storyteller for children. Your task is to rewrite the following story or scene description into a captivating voiceover script for a kids' video, in the specified language.
+    You are a professional screenwriter and voiceover artist. Your task is to write a single, continuous voiceover script based on a story. The script must be perfectly paced to match a video composed of a specific number of scenes, each with a fixed duration.
 
-    **Instructions:**
-    1.  **Target Language:** The final voiceover script MUST be written in **${language}**.
-    2.  **Engaging Hook:** Start with a hook! Ask a question or present a mysterious statement to make kids curious and want to watch the whole video.
-    3.  **Simple Language:** Use simple, easy-to-understand words that a young child can follow. Keep sentences short and clear.
-    4.  **Kid-Friendly Tone:** The tone should be friendly, warm, and exciting.
-    5.  **Character Limit:** **CRITICAL REQUIREMENT:** The final voiceover script MUST NOT exceed ${targetCharacterCount} characters. You must be concise.
-    6.  **Core Story:** Preserve the main events and feelings of the story.
-    7.  **Format:** Write it as a single, flowing paragraph ready for a voice actor to read. Do not include any headings or scene numbers.
+    **Core Task:**
+    Write a voiceover script in **${language}** that narrates the provided story.
 
-    **Original Story/Scene (in English):**
+    **Pacing Requirements (MANDATORY):**
+    - The video consists of exactly **${numPrompts}** scenes.
+    - Each scene is exactly **8 seconds** long.
+    - The total video length is ${numPrompts * 8} seconds.
+    - You MUST write the script so that the narration for each part of the story naturally aligns with its corresponding 8-second visual scene. The total spoken time of the script should be approximately ${numPrompts * 8} seconds.
+
+    **Content & Style:**
+    - The script must be a single block of text, without scene numbers or headings.
+    - The tone should be engaging, cinematic, and appropriate for the story.
+    - Start the narration directly from the first scene. Do not add any introductory hooks or titles.
+    - **IMPORTANT:** The provided story script may overuse character names. Your job is to make the narration sound natural for a voiceover. Use a fluid, natural mix of character names and pronouns (he, she, they, etc.) to avoid repetition and improve the flow.
+
+    **Story Script Provided:**
     ---
-    ${sourceText}
+    ${storyScript}
     ---
 
-    **Kids' Voiceover Script (in ${language}, MAX ${targetCharacterCount} characters):**
+    **Final Voiceover Script (single block of text):**
   `;
 
   try {
@@ -240,9 +246,8 @@ export async function generateVoiceoverScript(sourceText: string, targetCharacte
       },
     });
     
-    const text = response.text;
-
-    if (text === undefined || text === null) {
+    const text = response.text.trim();
+    if (!text) {
         const blockReason = response.promptFeedback?.blockReason;
         if (blockReason) {
             throw new Error(`Voiceover generation was blocked due to ${blockReason}.`);
@@ -251,6 +256,7 @@ export async function generateVoiceoverScript(sourceText: string, targetCharacte
     }
 
     return text;
+
   } catch (error) {
     throw handleApiError(error, 'voiceover generation');
   }
@@ -259,22 +265,21 @@ export async function generateVoiceoverScript(sourceText: string, targetCharacte
 export async function enhanceVoiceoverScript(script: string): Promise<string> {
   const prompt = `
     You are an expert voiceover director. Your goal is to make a script sound more natural and conversational when read by an AI text-to-speech engine.
-    Your task is to enhance the following script *purely* by using punctuation to guide the AI voice model's pacing and delivery.
+    Your task is to lightly edit the following script to improve its pacing and delivery for an AI voice model.
 
     **Instructions:**
-    - Use ellipses (...) to create natural pauses for thought or suspense.
-    - Use strategic commas to break up longer sentences and create a smooth, conversational flow.
-    - The focus is on creating a natural, human-like cadence.
-    - **CRITICAL:** You MUST NOT add, remove, or change any of the original words. Your ONLY tool is punctuation. Do NOT use parentheses or any other characters to add notes, as the AI will read them aloud.
-
-    The goal is a script that, when processed by a text-to-speech engine, sounds authentic, expressive, and easy to listen to.
+    - Break up long, complex sentences into shorter, more digestible ones.
+    - Use punctuation like ellipses (...) and commas to create natural pauses and a conversational rhythm.
+    - You may slightly rephrase parts for clarity and flow, but you MUST preserve the original meaning and core story events.
+    - **CRITICAL:** Do NOT add parenthetical notes like (excitedly) or (pause), as the AI will read them aloud. Your enhancement should be seamless within the text itself.
+    - The final output should be a script that sounds authentic, expressive, and easy to listen to when spoken.
 
     **Script to Enhance:**
     ---
     ${script}
     ---
 
-    **Enhanced Script (Punctuation Only):**
+    **Enhanced Script:**
   `;
 
   try {

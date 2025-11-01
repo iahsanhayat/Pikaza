@@ -13,7 +13,7 @@ const App: React.FC = () => {
   const [storyMode, setStoryMode] = useState<'detail' | 'quick'>('detail');
   const [numPrompts, setNumPrompts] = useState<number>(5);
   const [videoStyle, setVideoStyle] = useState<string>('3D Pixar style');
-  const [selectedVoice, setSelectedVoice] = useState<string>('Zephyr');
+  const [selectedVoice, setSelectedVoice] = useState<string>('Fenrir');
   const [voiceoverLanguage, setVoiceoverLanguage] = useState<string>('English');
 
   const [appStage, setAppStage] = useState<AppStage>('input');
@@ -102,23 +102,21 @@ const App: React.FC = () => {
 
 
   const handleGenerateVoiceover = useCallback(async () => {
-    const sourceText = generatedResult?.storyScript || (storyMode === 'detail' ? storyScene : '');
-    if (!sourceText.trim()) return;
+    if (!generatedResult?.storyScript) return;
 
     setIsVoiceoverLoading(true);
     setError(null);
     try {
-        const targetCharacterCount = numPrompts * 125;
-        const voiceover = await generateVoiceoverScript(sourceText, targetCharacterCount, voiceoverLanguage);
+        const voiceover = await generateVoiceoverScript(generatedResult.storyScript, generatedResult.prompts.length, voiceoverLanguage);
         setGeneratedResult(prev => prev ? { ...prev, voiceover, voiceoverAudio: undefined } : null); // Reset audio when script changes
         setEditableVoiceoverScript(voiceover);
     } catch (e) {
         console.error(e);
-        setError('An error occurred while generating the voiceover. Please try again.');
+        setError('An error occurred while generating the voiceover script. Please try again.');
     } finally {
         setIsVoiceoverLoading(false);
     }
-  }, [generatedResult, numPrompts, storyMode, storyScene, voiceoverLanguage]);
+  }, [generatedResult, voiceoverLanguage]);
 
   const handleEnhanceScript = useCallback(async () => {
     if (!editableVoiceoverScript.trim()) return;
@@ -128,13 +126,16 @@ const App: React.FC = () => {
     try {
         const enhancedScript = await enhanceVoiceoverScript(editableVoiceoverScript);
         setEditableVoiceoverScript(enhancedScript);
+        if (generatedResult) {
+          setGeneratedResult(prev => prev ? { ...prev, voiceover: enhancedScript } : null);
+        }
     } catch (e) {
         console.error(e);
         setError('An error occurred while enhancing the voiceover script. Please try again.');
     } finally {
         setIsEnhancingScript(false);
     }
-  }, [editableVoiceoverScript]);
+  }, [editableVoiceoverScript, generatedResult]);
   
   const handleGenerateAudio = useCallback(async () => {
     if (!editableVoiceoverScript.trim()) return;
@@ -152,6 +153,7 @@ const App: React.FC = () => {
           return {
               characterSheet: '',
               prompts: [],
+              voiceover: editableVoiceoverScript,
               voiceoverAudio: audioB64,
           };
       });
