@@ -417,7 +417,7 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   );
 
   return (
-    <form onSubmit={handleSubmit} className="bg-dark-card rounded-3xl p-4 shadow-soft-outset flex h-full">
+    <form onSubmit={handleSubmit} className="bg-dark-card rounded-3xl p-4 shadow-soft-outset flex h-full transition-shadow duration-300 hover:shadow-accent-glow">
         <nav className="w-1/3 border-r border-white/10 pr-4 flex flex-col space-y-2">
             {navItems.map(item => <NavItem key={item.step} {...item} />)}
         </nav>

@@ -184,7 +184,7 @@ const App: React.FC = () => {
         <p className="text-text-medium mt-1">AI Consistent Character Tool</p>
       </header>
 
-      <main className="flex-grow container mx-auto p-4 md:p-6 lg:p-12 grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+      <main className="flex-grow max-w-screen-2xl mx-auto p-4 md:p-6 lg:p-12 grid grid-cols-1 lg:grid-cols-2 gap-12 items-start w-full">
         <CharacterInputForm
           characterProfiles={characterProfiles}
           setCharacterProfiles={setCharacterProfiles}

@@ -279,7 +279,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
   };
 
   return (
-    <div className="bg-dark-card rounded-3xl p-8 shadow-soft-outset min-h-[500px] lg:min-h-0 lg:h-full flex flex-col relative">
+    <div className="bg-dark-card rounded-3xl p-8 shadow-soft-outset min-h-[500px] lg:min-h-0 lg:h-full flex flex-col relative transition-shadow duration-300 hover:shadow-accent-glow">
         <div className="flex-grow overflow-y-auto pr-4 -mr-4">
             {renderContent()}
         </div>
