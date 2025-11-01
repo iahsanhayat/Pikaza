@@ -109,13 +109,18 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
   
   const handleDownloadPrompts = () => {
     if (result?.prompts) {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(result.prompts, null, 2));
+      const promptsText = result.prompts
+        .map((p) => `${p.scene_number}. ${p.prompt}`)
+        .join('\n');
+      const blob = new Blob([promptsText], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = dataStr;
-      link.download = "prompts.json";
+      link.href = url;
+      link.download = 'prompts.txt';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     }
   };
 
@@ -193,7 +198,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                         <button
                             onClick={handleDownloadPrompts}
                             className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition"
-                            title="Download Prompts (.json)"
+                            title="Download Prompts (.txt)"
                         >
                             <DownloadIcon className="w-5 h-5" />
                         </button>
