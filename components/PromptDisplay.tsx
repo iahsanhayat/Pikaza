@@ -8,6 +8,8 @@ interface PromptDisplayProps {
   error: string | null;
   isThumbnailLoading: boolean;
   onGenerateThumbnail: () => void;
+  isThumbnailImageLoading: boolean;
+  onGenerateThumbnailImage: () => void;
 }
 
 const LoadingSkeleton: React.FC = () => (
@@ -44,7 +46,7 @@ const renderMarkdown = (markdown: string) => {
     return <div dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading, error, isThumbnailLoading, onGenerateThumbnail }) => {
+export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading, error, isThumbnailLoading, onGenerateThumbnail, isThumbnailImageLoading, onGenerateThumbnailImage }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [isThumbnailPromptCopied, setIsThumbnailPromptCopied] = useState(false);
 
@@ -64,7 +66,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
 
   const handleCopy = () => {
     if (result && result.prompts.length > 0) {
-      const promptsText = result.prompts.join('\n');
+      const promptsText = result.prompts.map(p => JSON.stringify(p)).join('\n');
       navigator.clipboard.writeText(promptsText);
       setIsCopied(true);
     }
@@ -79,7 +81,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
 
   const handleDownload = () => {
     if (result && result.prompts.length > 0) {
-        const fileContent = result.prompts.map((p, i) => `${i + 1}. ${p}`).join('\r\n\r\n');
+        const fileContent = result.prompts.map(p => JSON.stringify(p)).join('\r\n');
         const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -119,6 +121,17 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
         URL.revokeObjectURL(url);
     }
   }
+
+  const handleDownloadThumbnailImage = () => {
+    if (result?.thumbnailImage) {
+        const link = document.createElement('a');
+        link.href = `data:image/jpeg;base64,${result.thumbnailImage}`;
+        link.download = 'thumbnail.jpeg';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+  };
   
   const renderContent = () => {
     if (isLoading) {
@@ -170,10 +183,26 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
             
             {result.characterSheet && (
                  <div>
-                    <h2 className="text-2xl font-display font-bold text-text-light">Thumbnail Prompt</h2>
+                    <h2 className="text-2xl font-display font-bold text-text-light">Thumbnail</h2>
                     <div className="p-6 bg-dark-input rounded-2xl shadow-soft-inset mt-4">
-                        {isThumbnailLoading ? (
-                            <div className="flex items-center justify-center text-text-medium">
+                       {isThumbnailImageLoading ? (
+                            <div className="flex items-center justify-center text-text-medium py-8">
+                                <LoadingSpinnerIcon />
+                                <span className="ml-2">Generating 4K thumbnail image...</span>
+                            </div>
+                        ) : result.thumbnailImage ? (
+                            <div className="space-y-4">
+                                <img src={`data:image/jpeg;base64,${result.thumbnailImage}`} alt="Generated Thumbnail" className="rounded-lg w-full shadow-lg" />
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadThumbnailImage}
+                                    className="flex items-center justify-center w-full gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent-pink focus:outline-none transition"
+                                >
+                                    <DownloadIcon className="w-5 h-5" /> Download Image
+                                </button>
+                            </div>
+                        ) : isThumbnailLoading ? (
+                             <div className="flex items-center justify-center text-text-medium py-2">
                                 <LoadingSpinnerIcon />
                                 <span className="ml-2">Generating prompt...</span>
                             </div>
@@ -192,14 +221,22 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                                 </button>
                             </div>
                         ) : (
-                            <div className="text-center p-4">
+                            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 p-4">
                                 <button
                                     type="button"
                                     onClick={onGenerateThumbnail}
                                     disabled={isThumbnailLoading}
-                                    className="flex items-center justify-center mx-auto gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                    className="flex w-full sm:w-auto items-center justify-center mx-auto gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
-                                    <PhotoIcon className="w-5 h-5" /> Generate Thumbnail Prompt
+                                    <SparklesIcon className="w-5 h-5" /> Generate Prompt
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={onGenerateThumbnailImage}
+                                    disabled={isThumbnailImageLoading}
+                                    className="flex w-full sm:w-auto items-center justify-center mx-auto gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-accent-pink/80 shadow-soft-outset hover:bg-accent-pink focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                >
+                                    <PhotoIcon className="w-5 h-5" /> Generate 4K Image
                                 </button>
                             </div>
                         )}
@@ -210,11 +247,15 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
             {result.prompts.length > 0 && (
                 <div>
                     <div className="flex justify-between items-center">
-                        <h2 className="text-2xl font-display font-bold text-text-light">Image Prompts</h2>
+                        <h2 className="text-2xl font-display font-bold text-text-light">JSON Prompts</h2>
                     </div>
                     <ol className="list-decimal pl-5 space-y-4 mt-4">
                         {result.prompts.map((p, i) => (
-                            <li key={i} className="pl-2 leading-relaxed">{p}</li>
+                             <li key={i} className="pl-2">
+                                <pre className="whitespace-pre-wrap bg-dark-bg p-3 rounded-lg text-xs font-mono text-text-light">
+                                    <code>{JSON.stringify(p)}</code>
+                                </pre>
+                             </li>
                         ))}
                     </ol>
                 </div>
