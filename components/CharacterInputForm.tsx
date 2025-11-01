@@ -209,7 +209,7 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const audioContextRef = useRef<AudioContext | null>(null);
   const [sampleLoadingVoice, setSampleLoadingVoice] = useState<string | null>(null);
-  const VOICEOVER_CHAR_LIMIT = numPrompts * 150;
+  const VOICEOVER_CHAR_LIMIT = 10000;
 
   const [audioState, setAudioState] = useState<'paused' | 'playing' | 'stopped'>('stopped');
   const audioSourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
@@ -394,7 +394,7 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
     { step: 1, title: 'Define Characters & Story' },
     { step: 2, title: 'Define Video Style' },
     { step: 3, title: 'Configure Video Output' },
-    { step: 4, title: 'Generate Voiceover', disabled: !result },
+    { step: 4, title: 'Generate Voiceover' },
   ];
   
   const isSubmitDisabled = isLoading || !characterProfiles.some(c => c.appearance.trim()) || (storyMode === 'detail' ? !storyScene : !storyTitle);
@@ -517,18 +517,18 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                     <div className="space-y-6">
                         <h2 className="text-2xl font-bold font-display text-text-light">4. Generate Voiceover</h2>
                         <>
-                            <p className="text-text-medium">Generate a voiceover script, or write your own.</p>
+                            <p className="text-text-medium">Generate a voiceover script from your story, or write your own.</p>
                             <button
                                 type="button"
                                 onClick={onGenerateVoiceover}
                                 disabled={isVoiceoverLoading || !result || !result.storyScript}
                                 className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-input shadow-soft-outset hover:text-accent focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
-                                title={!result?.storyScript ? "Generate a story first" : "Generate voiceover script"}
+                                title={!result?.storyScript ? "Generate a story first to enable this" : "Generate voiceover script from story"}
                             >
                                 {isVoiceoverLoading ? (
                                     <><LoadingSpinnerIcon /> Generating Script...</>
                                 ) : (
-                                    <><MicIcon className="w-4 h-4" /> Generate Voiceover Script</>
+                                    <><MicIcon className="w-4 h-4" /> Generate from Story</>
                                 )}
                             </button>
                             
@@ -539,7 +539,7 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                                     value={editableVoiceoverScript}
                                     onChange={(e) => setEditableVoiceoverScript(e.target.value)}
                                     rows={8}
-                                    placeholder="Your voiceover script will appear here..."
+                                    placeholder="Your voiceover script will appear here, or you can paste your own..."
                                     maxLength={VOICEOVER_CHAR_LIMIT}
                                 />
                                 <button

@@ -77,8 +77,7 @@ const App: React.FC = () => {
     setIsVoiceoverLoading(true);
     setError(null);
     try {
-        const targetCharacterCount = numPrompts * 125;
-        const voiceover = await generateVoiceoverScript(generatedResult.storyScript, targetCharacterCount, voiceoverLanguage);
+        const voiceover = await generateVoiceoverScript(generatedResult.storyScript, numPrompts, voiceoverLanguage);
         setGeneratedResult(prev => prev ? { ...prev, voiceover, voiceoverAudio: undefined } : null); // Reset audio when script changes
         setEditableVoiceoverScript(voiceover);
     } catch (e) {
@@ -118,7 +117,7 @@ const App: React.FC = () => {
       setGeneratedResult(prev => {
           // If a previous result exists, update it
           if (prev) {
-              return { ...prev, voiceoverAudio: audioB64 };
+              return { ...prev, voiceover: editableVoiceoverScript, voiceoverAudio: audioB64 };
           }
           // Otherwise, create a new minimal result object for the standalone audio
           return {

@@ -165,26 +165,30 @@ export async function generateStoryAndPrompts(
   }
 }
 
-export async function generateVoiceoverScript(storyScript: string, targetCharacterCount: number, language: string): Promise<string> {
+export async function generateVoiceoverScript(storyScript: string, numPrompts: number, language: string): Promise<string> {
+  const minWords = numPrompts * 20;
+  const maxWords = numPrompts * 25;
   const prompt = `
-    You are a creative storyteller. Your task is to rewrite the following story script into a captivating voiceover script. The source script may overuse character names; you should rewrite it to use a natural mix of names and pronouns.
+    You are a creative storyteller and an expert voiceover scriptwriter. Your task is to rewrite the following story script into a captivating voiceover script that is perfectly timed for a video. The source script may overuse character names; you should rewrite it to use a natural mix of names and pronouns.
 
     **Instructions:**
     1.  **Language**: The entire voiceover script MUST be written in ${language}.
     2.  **Natural Language:** Rewrite the story to sound natural when spoken. Use a mix of character names and pronouns (he, she, they) appropriately.
-    3.  **Engaging Hook:** Start with a hook! Ask a question or present a mysterious statement to make the audience curious.
-    4.  **Simple Language:** Use simple, easy-to-understand words. Keep sentences short and clear.
-    5.  **Tone:** The tone should be friendly, warm, and exciting.
-    6.  **Character Limit:** **CRITICAL REQUIREMENT:** The final voiceover script MUST NOT exceed ${targetCharacterCount} characters. You must be concise.
-    7.  **Core Story:** Preserve the main events and feelings of the story.
-    8.  **Format:** Write it as a single, flowing paragraph ready for a voice actor to read. Do not include any headings or scene numbers.
+    3.  **Pacing and Timing (NON-NEGOTIABLE):**
+        - The video has ${numPrompts} scenes, each lasting 8 seconds.
+        - A comfortable speaking pace is about 20-25 words per 8 seconds.
+        - Therefore, the total script length MUST be between ${minWords} and ${maxWords} words.
+        - **This is the most critical rule. It is better to be slightly under the word count than over. Be concise. Cut any unnecessary words or sentences to meet this timing requirement.**
+    4.  **Tone:** The tone should be friendly, warm, and engaging.
+    5.  **Core Story:** Preserve the main events and feelings of the story.
+    6.  **Format:** Write it as a single, flowing paragraph ready for a voice actor to read. Do not include any headings, scene numbers, or an introductory hook. Start directly with the story's narration.
 
     **Original Story:**
     ---
     ${storyScript}
     ---
 
-    **${language} Voiceover Script (MAX ${targetCharacterCount} characters):**
+    **${language} Voiceover Script (Between ${minWords} and ${maxWords} words):**
   `;
 
   try {
@@ -214,13 +218,14 @@ export async function generateVoiceoverScript(storyScript: string, targetCharact
 
 export async function enhanceVoiceoverScript(script: string): Promise<string> {
   const prompt = `
-    You are an expert voiceover director. Your goal is to make the voice actor's performance sound like a calm, conversational, and mature storyteller. The delivery should have a natural flow, not be overly dramatic or deep-voiced.
-    Your task is to subtly enhance the following script to guide the voice actor.
-    - Insert expressive cues in parentheses to guide the tone towards a calm, conversational style. Examples: (calmly), (thoughtfully), (gently), (as if reminiscing).
-    - Use ellipses (...) and strategic commas to create a natural, smooth-flowing pace. Avoid abrupt stops.
-    - The focus is on clarity and a pleasant, engaging listening experience, not on a deep, booming narrator voice.
-    - **CRITICAL:** You must not change any of the original words of the script. Your role is only to add the parenthetical cues and punctuation for pacing.
-    - The goal is a performance that feels authentic, human, and easy to listen to.
+    You are an expert voiceover script editor. Your task is to subtly enhance the following script to improve its spoken flow and pacing for a voice actor.
+    The goal is a natural, conversational delivery.
+
+    **Instructions:**
+    1.  **Improve Flow:** You may slightly rephrase sentences or break up long sentences to make them easier to read aloud and sound more natural.
+    2.  **Add Pauses:** Use punctuation like commas (,), em dashes (—), and ellipses (...) to create natural pauses and improve the rhythm.
+    3.  **DO NOT add parenthetical cues:** Do not add instructions in parentheses like (pause) or (excitedly). The pacing should be controlled only through text and punctuation.
+    4.  **Preserve Meaning:** The core meaning and intent of the original script must be preserved.
 
     **Script to Enhance:**
     ---
