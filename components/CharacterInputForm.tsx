@@ -10,8 +10,8 @@ interface CharacterInputFormProps {
   setStoryScene: React.Dispatch<React.SetStateAction<string>>;
   storyTitle: string;
   setStoryTitle: React.Dispatch<React.SetStateAction<string>>;
-  storyMode: 'detail' | 'fromTitle';
-  setStoryMode: React.Dispatch<React.SetStateAction<'detail' | 'fromTitle'>>;
+  storyMode: 'detail' | 'fromTitle' | 'fromVoiceover';
+  setStoryMode: React.Dispatch<React.SetStateAction<'detail' | 'fromTitle' | 'fromVoiceover'>>;
   storyLength: 'Short' | 'Medium' | 'Long';
   setStoryLength: React.Dispatch<React.SetStateAction<'Short' | 'Medium' | 'Long'>>;
   videoLengthMinutes: number;
@@ -31,6 +31,8 @@ interface CharacterInputFormProps {
   isAudioLoading: boolean;
   editableVoiceoverScript: string;
   setEditableVoiceoverScript: React.Dispatch<React.SetStateAction<string>>;
+  voiceoverScriptInput: string;
+  setVoiceoverScriptInput: React.Dispatch<React.SetStateAction<string>>;
 }
 
 const InputField: React.FC<{
@@ -199,6 +201,8 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   isAudioLoading,
   editableVoiceoverScript,
   setEditableVoiceoverScript,
+  voiceoverScriptInput,
+  setVoiceoverScriptInput,
 }) => {
   const [activeStep, setActiveStep] = useState(1);
   const [playbackRate, setPlaybackRate] = useState(1.0);
@@ -228,14 +232,6 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
         newProfiles[index] = { ...newProfiles[index], [name]: value };
         return newProfiles;
     });
-  };
-
-  const handleSceneChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setStoryScene(e.target.value);
-  };
-
-  const handleTitleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setStoryTitle(e.target.value);
   };
   
   const handleSubmit = (e: React.FormEvent) => {
@@ -393,8 +389,10 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   ];
   
   const isSubmitDisabled = isLoading || (storyMode === 'detail'
-    ? !characterProfiles.some(c => c.appearance.trim()) || !storyScene.trim()
-    : !storyTitle.trim()
+      ? !characterProfiles.some(c => c.appearance.trim()) || !storyScene.trim()
+      : storyMode === 'fromTitle'
+      ? !storyTitle.trim()
+      : !voiceoverScriptInput.trim()
   );
   const submitButtonText = 'Generate Story & Prompts';
 
@@ -429,9 +427,10 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                         <div className="flex bg-dark-input p-1 rounded-full space-x-1 shadow-soft-inset">
                             <TabButton active={storyMode === 'detail'} onClick={() => setStoryMode('detail')}>Detailed Scene</TabButton>
                             <TabButton active={storyMode === 'fromTitle'} onClick={() => setStoryMode('fromTitle')}>From Title</TabButton>
+                            <TabButton active={storyMode === 'fromVoiceover'} onClick={() => setStoryMode('fromVoiceover')}>From Voiceover</TabButton>
                         </div>
 
-                        {storyMode !== 'fromTitle' && (
+                        {storyMode === 'detail' && (
                             <div className="space-y-4">
                                 {characterProfiles.map((profile, index) => (
                                     <div key={index} className="bg-dark-input rounded-2xl p-4 shadow-soft-inset space-y-3">
@@ -453,11 +452,13 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                             </div>
                         )}
 
-                        {storyMode === 'detail' ? (
-                            <TextareaField id="storyScene" label="Story Scene / Plot Point" value={storyScene} placeholder="Describe the action. e.g., 'Kaelen stands on a rain-slicked rooftop at midnight...'" onChange={handleSceneChange} rows={5} required />
-                        ) : (
+                        {storyMode === 'detail' && (
+                            <TextareaField id="storyScene" label="Story Scene / Plot Point" value={storyScene} placeholder="Describe the action. e.g., 'Kaelen stands on a rain-slicked rooftop at midnight...'" onChange={(e) => setStoryScene(e.target.value)} rows={5} required />
+                        )}
+
+                        {storyMode === 'fromTitle' && (
                             <div className="space-y-6">
-                                <TextareaField id="storyTitle" label="Story Title" value={storyTitle} placeholder="e.g., 'The Clockwork Alchemist of Neo-Prague'" onChange={handleTitleChange} rows={3} required />
+                                <TextareaField id="storyTitle" label="Story Title" value={storyTitle} placeholder="e.g., 'The Clockwork Alchemist of Neo-Prague'" onChange={(e) => setStoryTitle(e.target.value)} rows={3} required />
                                 <div>
                                     <label className="block text-sm font-medium text-text-medium mb-2">Desired Story Length</label>
                                     <div className="flex bg-dark-input p-1 rounded-full space-x-1 shadow-soft-inset">
@@ -467,6 +468,18 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                                     </div>
                                 </div>
                             </div>
+                        )}
+
+                        {storyMode === 'fromVoiceover' && (
+                           <TextareaField 
+                                id="voiceoverScriptInput" 
+                                label="Voiceover Script" 
+                                value={voiceoverScriptInput} 
+                                placeholder="Paste your full voiceover script here. The AI will extract characters, write a story, and generate prompts from it." 
+                                onChange={(e) => setVoiceoverScriptInput(e.target.value)} 
+                                rows={10} 
+                                required 
+                            />
                         )}
                     </div>
                 )}

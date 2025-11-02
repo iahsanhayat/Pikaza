@@ -47,8 +47,8 @@ function handleApiError(error: unknown, context: string): Error {
 interface GenerateOptions {
   characters: CharacterProfile[];
   numPrompts: number;
-  mode: 'detail' | 'fromTitle';
-  sceneOrTitle: string;
+  mode: 'detail' | 'fromTitle' | 'fromVoiceover';
+  sceneOrTitleOrVoiceover: string;
   videoStyle: string;
   storyLength: 'Short' | 'Medium' | 'Long';
 }
@@ -57,7 +57,7 @@ export async function generateStoryAndPrompts(
   options: GenerateOptions
 ): Promise<GeneratedResult> {
   
-  const { characters, numPrompts, mode, sceneOrTitle, videoStyle, storyLength } = options;
+  const { characters, numPrompts, mode, sceneOrTitleOrVoiceover, videoStyle, storyLength } = options;
 
   const fromTitleSchema = {
     type: Type.OBJECT,
@@ -110,44 +110,121 @@ export async function generateStoryAndPrompts(
     },
     required: ['characterSheet', 'prompts']
   };
+
+  const fromVoiceoverSchema = {
+    type: Type.OBJECT,
+    properties: {
+        characterSheet: {
+            type: Type.STRING,
+            description: "A single Markdown document containing the detailed, reusable character sheets for all characters identified from the voiceover script (those mentioned more than once)."
+        },
+        storyScript: {
+            type: Type.STRING,
+            description: "The full story script, written as a narrative based on the provided voiceover script."
+        },
+        characters: {
+            type: Type.ARRAY,
+            description: "A list of JSON objects, each representing a generated character with their name and a detailed, copyable prompt-style description.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING, description: "The name of the generated character." },
+                    description: { type: Type.STRING, description: "A detailed, self-contained description of the character's appearance, suitable for use as a prompt." }
+                },
+                required: ['name', 'description']
+            }
+        },
+        prompts: {
+          type: Type.ARRAY,
+          description: `A list of exactly ${numPrompts} JSON objects, each representing a scene for image generation.`,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              scene_number: { type: Type.INTEGER, description: "The chronological order of the scene, starting from 1." },
+              start_time_seconds: { type: Type.INTEGER, description: "The start time of this scene in the video, in seconds." },
+              end_time_seconds: { type: Type.INTEGER, description: "The end time of this scene in the video, in seconds. This should be 8 seconds after the start time." },
+              prompt: { type: Type.STRING, description: "A highly detailed, self-contained prompt for an AI image generator, including video style, character descriptions, action, and environment. End with '--ar 16:9'." }
+            },
+            required: ['scene_number', 'start_time_seconds', 'end_time_seconds', 'prompt']
+          }
+        }
+    },
+    required: ['characterSheet', 'storyScript', 'characters', 'prompts']
+};
   
-  const schema = mode === 'fromTitle' ? fromTitleSchema : detailSchema;
+  let schema;
+  let masterPrompt;
   
   const characterDetails = characters.map(c => `- Name: ${c.name || 'Unnamed'}\n  - Key Physical Appearance Details: ${c.appearance}`).join('\n');
 
-  const masterPrompt = `
-    You are an expert prompt engineer and a creative storyteller.
-    Your task is to generate content based on user input.
-    The final output must be a JSON object matching the provided schema.
-    Desired Video Style for any visual descriptions: ${videoStyle}
+  switch (mode) {
+    case 'fromVoiceover':
+        schema = fromVoiceoverSchema;
+        masterPrompt = `
+          You are an expert prompt engineer and a creative storyteller. Your task is to generate content based on a provided voiceover script.
+          The final output must be a JSON object matching the provided schema.
+          Desired Video Style for any visual descriptions: ${videoStyle}
+  
+          **Mode: From Voiceover**
+          - Voiceover Script Provided: "${sceneOrTitleOrVoiceover}"
+          - Number of Image Prompts to Generate: ${numPrompts}
+  
+          1.  **Analyze Script & Identify Characters:** Read the voiceover script carefully. Identify all characters that are mentioned more than one time.
+          2.  **Invent & Create Character Sheets:** For each identified character, invent a detailed visual appearance. Write a highly descriptive "Character Sheet" for **EACH** invented character. This sheet is crucial for visual consistency. Use specific keywords for an AI image generator. Combine all character sheets into a single markdown string under a main "Character Sheets" heading.
+          3.  **Write Story Script:** Based on the voiceover, write a full narrative story script that expands on the events. This story should logically flow and be divisible into ${numPrompts} scenes.
+          4.  **Generate Character Descriptions:** For each character you invented, create a separate JSON object containing their name and a detailed, self-contained, prompt-style description of their appearance.
+          5.  **Generate Video Prompts:** Break down the story into ${numPrompts} sequential scenes. For each scene, create a JSON prompt object.
+          6.  **CRITICAL RULE for each prompt object:**
+              -   \`scene_number\`, \`start_time_seconds\`, \`end_time_seconds\`: Calculate these based on an 8-second duration for each scene (e.g., scene 1 is 0-8s, scene 2 is 8-16s, etc.).
+              -   \`prompt\`: This string MUST begin with "${videoStyle}". Then, for **ANY** character mentioned by name, you **MUST** include their detailed appearance from their character sheet to maintain consistency. This is followed by a description of the action, environment, lighting, and mood. The prompt string MUST end with "--ar 16:9".
+          7.  **Final JSON:** Populate all fields: 'characterSheet', 'storyScript', 'characters', and 'prompts'.
+        `;
+        break;
+    case 'fromTitle':
+        schema = fromTitleSchema;
+        masterPrompt = `
+            You are an expert prompt engineer and a creative storyteller.
+            Your task is to generate content based on user input.
+            The final output must be a JSON object matching the provided schema.
+            Desired Video Style for any visual descriptions: ${videoStyle}
+        
+            **Mode: From Title**
+            - Story Title: "${sceneOrTitleOrVoiceover}"
+            - Desired Story Length: ${storyLength}
+        
+            1.  **Invent Characters:** Based on the story title, invent at least two compelling characters that fit the theme.
+            2.  **Create Character Sheets:** Write a highly detailed, descriptive "Character Sheet" for **EACH** invented character. This sheet is crucial for visual consistency. Use specific keywords for an AI image generator. Break it down into logical categories (e.g., 'Face', 'Hair', 'Attire'). Combine all character sheets into a single markdown string under a main "Character Sheets" heading.
+            3.  **Write Story Script:** Write a ${storyLength}, compelling story based on the title and the characters you invented.
+            4.  **Generate Character Descriptions:** For each character you invented, create a separate JSON object containing their name and a detailed, self-contained, prompt-style description of their appearance. This description should be dense with visual keywords.
+            5.  **Final JSON:** Populate the 'characterSheet', 'storyScript', and 'characters' fields in the JSON output. Do NOT generate 'prompts'.
+        `;
+        break;
+    case 'detail':
+    default:
+        schema = detailSchema;
+        masterPrompt = `
+            You are an expert prompt engineer and a creative storyteller.
+            Your task is to generate content based on user input.
+            The final output must be a JSON object matching the provided schema.
+            Desired Video Style for any visual descriptions: ${videoStyle}
 
-    ${mode === 'fromTitle' ? `
-    **Mode: From Title**
-    - Story Title: "${sceneOrTitle}"
-    - Desired Story Length: ${storyLength}
-
-    1.  **Invent Characters:** Based on the story title, invent at least two compelling characters that fit the theme.
-    2.  **Create Character Sheets:** Write a highly detailed, descriptive "Character Sheet" for **EACH** invented character. This sheet is crucial for visual consistency. Use specific keywords for an AI image generator. Break it down into logical categories (e.g., 'Face', 'Hair', 'Attire'). Combine all character sheets into a single markdown string under a main "Character Sheets" heading.
-    3.  **Write Story Script:** Write a ${storyLength}, compelling story based on the title and the characters you invented.
-    4.  **Generate Character Descriptions:** For each character you invented, create a separate JSON object containing their name and a detailed, self-contained, prompt-style description of their appearance. This description should be dense with visual keywords.
-    5.  **Final JSON:** Populate the 'characterSheet', 'storyScript', and 'characters' fields in the JSON output. Do NOT generate 'prompts'.
-    ` : `
-    **Mode: Detailed Scene**
-    - Scene Description: "${sceneOrTitle}"
-    - Character Details Provided:
-      ${characterDetails}
-    - Number of Image Prompts to Generate: ${numPrompts}
-    - Assumed scene duration: 8 seconds.
-    
-    1.  First, create a highly detailed, descriptive "Character Sheet" for **EACH** character based on the details provided. This sheet is crucial for visual consistency. Use specific keywords for an AI image generator. Break it down into logical categories (e.g., 'Face', 'Hair', 'Attire'). Combine all character sheets into a single markdown string under a main "Character Sheets" heading.
-    2.  Then, based on the scene description, generate ${numPrompts} distinct, sequential JSON prompt objects that depict the unfolding action within that scene. Imagine it as a short storyboard.
-    3.  **CRITICAL RULE for each JSON prompt object:**
-        -   \`scene_number\`: The chronological order of the scene, starting from 1.
-        -   \`start_time_seconds\` and \`end_time_seconds\`: Calculate these based on an 8-second duration for each scene (e.g., scene 1 is 0-8s, scene 2 is 8-16s, etc.).
-        -   \`prompt\`: This string MUST begin with the video style: "${videoStyle}". Then, for **ANY** character mentioned by name, you **MUST** include their detailed appearance from their character sheet to maintain consistency. This should be followed by a description of the action, environment, lighting, and mood. The prompt string MUST end with "--ar 16:9".
-    4.  Populate the 'characterSheet' and 'prompts' fields in the JSON output. Do not generate a 'storyScript' or 'characters'.
-    `}
-  `;
+            **Mode: Detailed Scene**
+            - Scene Description: "${sceneOrTitleOrVoiceover}"
+            - Character Details Provided:
+              ${characterDetails}
+            - Number of Image Prompts to Generate: ${numPrompts}
+            - Assumed scene duration: 8 seconds.
+            
+            1.  First, create a highly detailed, descriptive "Character Sheet" for **EACH** character based on the details provided. This sheet is crucial for visual consistency. Use specific keywords for an AI image generator. Break it down into logical categories (e.g., 'Face', 'Hair', 'Attire'). Combine all character sheets into a single markdown string under a main "Character Sheets" heading.
+            2.  Then, based on the scene description, generate ${numPrompts} distinct, sequential JSON prompt objects that depict the unfolding action within that scene. Imagine it as a short storyboard.
+            3.  **CRITICAL RULE for each JSON prompt object:**
+                -   \`scene_number\`: The chronological order of the scene, starting from 1.
+                -   \`start_time_seconds\` and \`end_time_seconds\`: Calculate these based on an 8-second duration for each scene (e.g., scene 1 is 0-8s, scene 2 is 8-16s, etc.).
+                -   \`prompt\`: This string MUST begin with the video style: "${videoStyle}". Then, for **ANY** character mentioned by name, you **MUST** include their detailed appearance from their character sheet to maintain consistency. This should be followed by a description of the action, environment, lighting, and mood. The prompt string MUST end with "--ar 16:9".
+            4.  Populate the 'characterSheet' and 'prompts' fields in the JSON output. Do not generate a 'storyScript' or 'characters'.
+        `;
+        break;
+  }
 
   try {
     const response: GenerateContentResponse = await aiGlobal.models.generateContent({
@@ -172,9 +249,9 @@ export async function generateStoryAndPrompts(
 
     const result = JSON.parse(jsonText.trim());
 
-    if(mode === 'detail' && (result.storyScript || result.characters)) {
-        delete result.storyScript;
-        delete result.characters;
+    if(mode === 'detail') {
+        if (result.storyScript) delete result.storyScript;
+        if (result.characters) delete result.characters;
     }
     if (mode === 'fromTitle' && result.prompts) {
         delete result.prompts;

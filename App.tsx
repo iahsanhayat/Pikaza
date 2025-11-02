@@ -12,11 +12,12 @@ const App: React.FC = () => {
   }]);
   const [storyScene, setStoryScene] = useState<string>('');
   const [storyTitle, setStoryTitle] = useState<string>('');
-  const [storyMode, setStoryMode] = useState<'detail' | 'fromTitle'>('detail');
+  const [storyMode, setStoryMode] = useState<'detail' | 'fromTitle' | 'fromVoiceover'>('detail');
   const [storyLength, setStoryLength] = useState<'Short' | 'Medium' | 'Long'>('Medium');
   const [videoLengthMinutes, setVideoLengthMinutes] = useState<number>(1);
   const [videoStyle, setVideoStyle] = useState<string>('3D Pixar style');
   const [selectedVoice, setSelectedVoice] = useState<string>('Zephyr');
+  const [voiceoverScriptInput, setVoiceoverScriptInput] = useState<string>('');
 
   const [generatedResult, setGeneratedResult] = useState<GeneratedResult | null>(null);
   const [editableVoiceoverScript, setEditableVoiceoverScript] = useState<string>('');
@@ -46,16 +47,27 @@ const App: React.FC = () => {
             setIsLoading(false);
             return;
         }
+    } else if (storyMode === 'fromVoiceover') {
+        if (!voiceoverScriptInput.trim()) {
+            setError('For "From Voiceover" mode, please provide a voiceover script.');
+            setIsLoading(false);
+            return;
+        }
     }
+
 
     try {
       const numPrompts = Math.ceil((videoLengthMinutes * 60) / 8);
-      const sceneOrTitle = storyMode === 'detail' ? storyScene : storyTitle;
+      const sceneOrTitleOrVoiceover = 
+          storyMode === 'detail' ? storyScene :
+          storyMode === 'fromTitle' ? storyTitle :
+          voiceoverScriptInput;
+
       const result = await generateStoryAndPrompts({
         characters: storyMode === 'detail' ? characterProfiles.filter(c => c.appearance.trim()) : [],
         numPrompts,
         mode: storyMode,
-        sceneOrTitle,
+        sceneOrTitleOrVoiceover,
         videoStyle,
         storyLength,
       });
@@ -67,7 +79,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [characterProfiles, storyScene, storyTitle, storyMode, videoLengthMinutes, videoStyle, storyLength]);
+  }, [characterProfiles, storyScene, storyTitle, voiceoverScriptInput, storyMode, videoLengthMinutes, videoStyle, storyLength]);
 
   const handleGenerateVoiceover = useCallback(async () => {
     if (!generatedResult?.storyScript) return;
@@ -214,6 +226,8 @@ const App: React.FC = () => {
           isAudioLoading={isAudioLoading}
           editableVoiceoverScript={editableVoiceoverScript}
           setEditableVoiceoverScript={setEditableVoiceoverScript}
+          voiceoverScriptInput={voiceoverScriptInput}
+          setVoiceoverScriptInput={setVoiceoverScriptInput}
         />
         <PromptDisplay
           result={generatedResult}
