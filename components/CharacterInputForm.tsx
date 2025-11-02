@@ -208,7 +208,7 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const audioContextRef = useRef<AudioContext | null>(null);
   const [sampleLoadingVoice, setSampleLoadingVoice] = useState<string | null>(null);
-  const VOICEOVER_CHAR_LIMIT = 10000;
+  const VOICEOVER_CHAR_LIMIT = 5000;
 
   const [audioState, setAudioState] = useState<'paused' | 'playing' | 'stopped'>('stopped');
   const audioSourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
