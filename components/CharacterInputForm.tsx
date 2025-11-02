@@ -10,12 +10,12 @@ interface CharacterInputFormProps {
   setStoryScene: React.Dispatch<React.SetStateAction<string>>;
   storyTitle: string;
   setStoryTitle: React.Dispatch<React.SetStateAction<string>>;
-  storyMode: 'detail' | 'quick';
-  setStoryMode: React.Dispatch<React.SetStateAction<'detail' | 'quick'>>;
+  storyMode: 'detail' | 'fromTitle';
+  setStoryMode: React.Dispatch<React.SetStateAction<'detail' | 'fromTitle'>>;
+  storyLength: 'Short' | 'Medium' | 'Long';
+  setStoryLength: React.Dispatch<React.SetStateAction<'Short' | 'Medium' | 'Long'>>;
   videoLengthMinutes: number;
-  setVideoLengthMinutes: (minutes: number) => void;
-  numPrompts: number;
-  setNumPrompts: (count: number) => void;
+  setVideoLengthMinutes: React.Dispatch<React.SetStateAction<number>>;
   videoStyle: string;
   setVideoStyle: React.Dispatch<React.SetStateAction<string>>;
   onSubmit: () => void;
@@ -27,8 +27,6 @@ interface CharacterInputFormProps {
   isEnhancingScript: boolean;
   selectedVoice: string;
   setSelectedVoice: React.Dispatch<React.SetStateAction<string>>;
-  voiceoverLanguage: string;
-  setVoiceoverLanguage: React.Dispatch<React.SetStateAction<string>>;
   onGenerateAudio: () => void;
   isAudioLoading: boolean;
   editableVoiceoverScript: string;
@@ -182,10 +180,10 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   setStoryTitle,
   storyMode,
   setStoryMode,
+  storyLength,
+  setStoryLength,
   videoLengthMinutes,
   setVideoLengthMinutes,
-  numPrompts,
-  setNumPrompts,
   videoStyle,
   setVideoStyle,
   onSubmit,
@@ -197,15 +195,12 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   isEnhancingScript,
   selectedVoice,
   setSelectedVoice,
-  voiceoverLanguage,
-  setVoiceoverLanguage,
   onGenerateAudio,
   isAudioLoading,
   editableVoiceoverScript,
   setEditableVoiceoverScript,
 }) => {
   const [activeStep, setActiveStep] = useState(1);
-  const [inputMode, setInputMode] = useState<'minutes' | 'count'>('minutes');
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const audioContextRef = useRef<AudioContext | null>(null);
   const [sampleLoadingVoice, setSampleLoadingVoice] = useState<string | null>(null);
@@ -397,7 +392,10 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
     { step: 4, title: 'Generate Voiceover' },
   ];
   
-  const isSubmitDisabled = isLoading || !characterProfiles.some(c => c.appearance.trim()) || (storyMode === 'detail' ? !storyScene : !storyTitle);
+  const isSubmitDisabled = isLoading || (storyMode === 'detail'
+    ? !characterProfiles.some(c => c.appearance.trim()) || !storyScene.trim()
+    : !storyTitle.trim()
+  );
   const submitButtonText = 'Generate Story & Prompts';
 
 
@@ -428,34 +426,47 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                     <div className="space-y-6">
                         <h2 className="text-2xl font-bold font-display text-text-light">1. Define Characters & Story</h2>
                         
-                        <div className="space-y-4">
-                            {characterProfiles.map((profile, index) => (
-                                <div key={index} className="bg-dark-input rounded-2xl p-4 shadow-soft-inset space-y-3">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className="text-lg font-semibold text-accent">Character {index + 1}</h3>
-                                        {characterProfiles.length > 1 && (
-                                            <button type="button" onClick={() => handleRemoveCharacter(index)} className="p-2 rounded-full hover:bg-white/10 text-text-medium hover:text-accent">
-                                                <TrashIcon className="w-5 h-5" />
-                                            </button>
-                                        )}
-                                    </div>
-                                    <InputField id={`name-${index}`} name="name" label="Name" value={profile.name} onChange={(e) => handleProfileChange(index, e)} placeholder="e.g., Kaelen" />
-                                    <TextareaField id={`appearance-${index}`} name="appearance" label="Appearance Details" value={profile.appearance} onChange={(e) => handleProfileChange(index, e)} placeholder="e.g., silver hair, glowing cybernetic eye, worn leather jacket" rows={3} required />
-                                </div>
-                            ))}
-                            <button type="button" onClick={handleAddCharacter} className="w-full py-2 px-4 border-2 border-dashed border-text-medium/50 rounded-xl text-text-medium hover:text-text-light hover:border-text-medium transition-colors">
-                                + Add Another Character
-                            </button>
-                        </div>
-
                         <div className="flex bg-dark-input p-1 rounded-full space-x-1 shadow-soft-inset">
                             <TabButton active={storyMode === 'detail'} onClick={() => setStoryMode('detail')}>Detailed Scene</TabButton>
-                            <TabButton active={storyMode === 'quick'} onClick={() => setStoryMode('quick')}>Quick Story</TabButton>
+                            <TabButton active={storyMode === 'fromTitle'} onClick={() => setStoryMode('fromTitle')}>From Title</TabButton>
                         </div>
+
+                        {storyMode !== 'fromTitle' && (
+                            <div className="space-y-4">
+                                {characterProfiles.map((profile, index) => (
+                                    <div key={index} className="bg-dark-input rounded-2xl p-4 shadow-soft-inset space-y-3">
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="text-lg font-semibold text-accent">Character {index + 1}</h3>
+                                            {characterProfiles.length > 1 && (
+                                                <button type="button" onClick={() => handleRemoveCharacter(index)} className="p-2 rounded-full hover:bg-white/10 text-text-medium hover:text-accent">
+                                                    <TrashIcon className="w-5 h-5" />
+                                                </button>
+                                            )}
+                                        </div>
+                                        <InputField id={`name-${index}`} name="name" label="Name" value={profile.name} onChange={(e) => handleProfileChange(index, e)} placeholder="e.g., Kaelen" />
+                                        <TextareaField id={`appearance-${index}`} name="appearance" label="Appearance Details" value={profile.appearance} onChange={(e) => handleProfileChange(index, e)} placeholder="e.g., silver hair, glowing cybernetic eye, worn leather jacket" rows={3} required />
+                                    </div>
+                                ))}
+                                <button type="button" onClick={handleAddCharacter} className="w-full py-2 px-4 border-2 border-dashed border-text-medium/50 rounded-xl text-text-medium hover:text-text-light hover:border-text-medium transition-colors">
+                                    + Add Another Character
+                                </button>
+                            </div>
+                        )}
+
                         {storyMode === 'detail' ? (
                             <TextareaField id="storyScene" label="Story Scene / Plot Point" value={storyScene} placeholder="Describe the action. e.g., 'Kaelen stands on a rain-slicked rooftop at midnight...'" onChange={handleSceneChange} rows={5} required />
                         ) : (
-                            <TextareaField id="storyTitle" label="Story Title or Description" value={storyTitle} placeholder="Provide a title or a short idea. e.g., 'The Last Dragon Rider's Gambit'" onChange={handleTitleChange} rows={5} required />
+                            <div className="space-y-6">
+                                <TextareaField id="storyTitle" label="Story Title" value={storyTitle} placeholder="e.g., 'The Clockwork Alchemist of Neo-Prague'" onChange={handleTitleChange} rows={3} required />
+                                <div>
+                                    <label className="block text-sm font-medium text-text-medium mb-2">Desired Story Length</label>
+                                    <div className="flex bg-dark-input p-1 rounded-full space-x-1 shadow-soft-inset">
+                                        <TabButton active={storyLength === 'Short'} onClick={() => setStoryLength('Short')}>Short</TabButton>
+                                        <TabButton active={storyLength === 'Medium'} onClick={() => setStoryLength('Medium')}>Medium</TabButton>
+                                        <TabButton active={storyLength === 'Long'} onClick={() => setStoryLength('Long')}>Long</TabButton>
+                                    </div>
+                                </div>
+                            </div>
                         )}
                     </div>
                 )}
@@ -477,40 +488,19 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                 {activeStep === 3 && (
                     <div className="space-y-6">
                         <h2 className="text-2xl font-bold font-display text-text-light">3. Configure Video Output</h2>
-                        <div className="flex bg-dark-input p-1 rounded-full space-x-1 shadow-soft-inset">
-                            <TabButton active={inputMode === 'minutes'} onClick={() => setInputMode('minutes')}>By Minutes</TabButton>
-                            <TabButton active={inputMode === 'count'} onClick={() => setInputMode('count')}>By Prompts</TabButton>
+                        <div>
+                            <InputField
+                                label="Video Length (minutes)"
+                                id="videoLength"
+                                type="number"
+                                value={videoLengthMinutes}
+                                onChange={(e) => setVideoLengthMinutes(parseFloat(e.target.value))}
+                                min="0.1"
+                                step="0.1"
+                                placeholder="e.g., 1.5"
+                            />
+                            <p className="text-xs text-text-medium mt-2 text-right">An 8-second scene is generated for approx. every 0.13 minutes.</p>
                         </div>
-
-                        {inputMode === 'minutes' ? (
-                            <div>
-                                <InputField
-                                    label="Video Length (minutes)"
-                                    id="videoLength"
-                                    type="number"
-                                    value={videoLengthMinutes}
-                                    onChange={(e) => setVideoLengthMinutes(parseFloat(e.target.value))}
-                                    min="0.1"
-                                    step="0.1"
-                                    placeholder="e.g., 1.5"
-                                />
-                                <p className="text-xs text-text-medium mt-2 text-right">Generates approx. {numPrompts} prompts.</p>
-                            </div>
-                        ) : (
-                            <div>
-                                <InputField
-                                    label="Number of Prompts"
-                                    id="numPrompts"
-                                    type="number"
-                                    value={numPrompts}
-                                    onChange={(e) => setNumPrompts(parseInt(e.target.value, 10))}
-                                    min="1"
-                                    step="1"
-                                    placeholder="e.g., 8"
-                                />
-                                <p className="text-xs text-text-medium mt-2 text-right">Equals a video length of approx. {videoLengthMinutes.toFixed(1)} minutes.</p>
-                            </div>
-                        )}
                     </div>
                 )}
                 {activeStep === 4 && (
@@ -557,16 +547,6 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                                 {editableVoiceoverScript.length} / {VOICEOVER_CHAR_LIMIT} characters
                             </p>
                             
-                            <div>
-                                <label htmlFor="languageSelect" className="block text-sm font-medium text-text-medium mb-2">Voiceover Language</label>
-                                <select id="languageSelect" value={voiceoverLanguage} onChange={(e) => setVoiceoverLanguage(e.target.value)} className="w-full bg-dark-input rounded-xl shadow-soft-inset py-3 px-4 text-text-light focus:outline-none focus:ring-2 focus:ring-accent/50 border-transparent transition-all duration-300 appearance-none">
-                                    <option value="English">English</option>
-                                    <option value="Hindi">Hindi</option>
-                                    <option value="Urdu">Urdu</option>
-                                    <option value="Roman Urdu">Roman Urdu</option>
-                                </select>
-                            </div>
-
                             <div>
                                 <label htmlFor="voiceSelect" className="block text-sm font-medium text-text-medium mb-2">Character Voice</label>
                                 <div className="flex items-center gap-2">

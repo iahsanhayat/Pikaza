@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+// FIX: Import CharacterProfile type.
 import type { GeneratedResult, CharacterProfile } from './types';
 import { CharacterInputForm } from './components/CharacterInputForm';
 import { PromptDisplay } from './components/PromptDisplay';
@@ -11,12 +12,11 @@ const App: React.FC = () => {
   }]);
   const [storyScene, setStoryScene] = useState<string>('');
   const [storyTitle, setStoryTitle] = useState<string>('');
-  const [storyMode, setStoryMode] = useState<'detail' | 'quick'>('detail');
+  const [storyMode, setStoryMode] = useState<'detail' | 'fromTitle'>('detail');
+  const [storyLength, setStoryLength] = useState<'Short' | 'Medium' | 'Long'>('Medium');
   const [videoLengthMinutes, setVideoLengthMinutes] = useState<number>(1);
-  const [numPrompts, setNumPrompts] = useState<number>(Math.ceil(1 * 60 / 8));
   const [videoStyle, setVideoStyle] = useState<string>('3D Pixar style');
-  const [selectedVoice, setSelectedVoice] = useState<string>('Fenrir');
-  const [voiceoverLanguage, setVoiceoverLanguage] = useState<string>('English');
+  const [selectedVoice, setSelectedVoice] = useState<string>('Zephyr');
 
   const [generatedResult, setGeneratedResult] = useState<GeneratedResult | null>(null);
   const [editableVoiceoverScript, setEditableVoiceoverScript] = useState<string>('');
@@ -28,48 +28,46 @@ const App: React.FC = () => {
   const [isThumbnailImageLoading, setIsThumbnailImageLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleVideoLengthChange = (minutes: number) => {
-    const validMinutes = Math.max(0.1, minutes) || 1;
-    setVideoLengthMinutes(validMinutes);
-    setNumPrompts(Math.ceil(validMinutes * 60 / 8));
-  };
-
-  const handleNumPromptsChange = (count: number) => {
-    const validCount = Math.max(1, count) || 1;
-    setNumPrompts(validCount);
-    setVideoLengthMinutes(parseFloat((validCount * 8 / 60).toFixed(1)));
-  };
-
-
   const handleGenerate = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     setGeneratedResult(null);
     setEditableVoiceoverScript('');
 
-    const sceneOrTitle = storyMode === 'detail' ? storyScene : storyTitle;
-    if (!characterProfiles.some(c => c.appearance.trim()) || !sceneOrTitle) {
-      setError('Please provide appearance details for at least one character and a story scene/title.');
-      setIsLoading(false);
-      return;
+    if (storyMode === 'detail') {
+        if (!characterProfiles.some(c => c.appearance.trim()) || !storyScene.trim()) {
+            setError('For "Detailed Scene" mode, please provide appearance details for at least one character and a story scene.');
+            setIsLoading(false);
+            return;
+        }
+    } else if (storyMode === 'fromTitle') {
+        if (!storyTitle.trim()) {
+            setError('For "From Title" mode, please provide a story title.');
+            setIsLoading(false);
+            return;
+        }
     }
 
     try {
+      const numPrompts = Math.ceil((videoLengthMinutes * 60) / 8);
+      const sceneOrTitle = storyMode === 'detail' ? storyScene : storyTitle;
       const result = await generateStoryAndPrompts({
-        characters: characterProfiles.filter(c => c.appearance.trim()),
+        characters: storyMode === 'detail' ? characterProfiles.filter(c => c.appearance.trim()) : [],
         numPrompts,
         mode: storyMode,
         sceneOrTitle,
         videoStyle,
+        storyLength,
       });
       setGeneratedResult(result);
     } catch (e) {
       console.error(e);
-      setError('An error occurred while generating the content. Please try again.');
+      const errorMessage = e instanceof Error ? e.message : 'An error occurred while generating the content. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  }, [characterProfiles, storyScene, storyTitle, storyMode, numPrompts, videoStyle]);
+  }, [characterProfiles, storyScene, storyTitle, storyMode, videoLengthMinutes, videoStyle, storyLength]);
 
   const handleGenerateVoiceover = useCallback(async () => {
     if (!generatedResult?.storyScript) return;
@@ -77,16 +75,18 @@ const App: React.FC = () => {
     setIsVoiceoverLoading(true);
     setError(null);
     try {
-        const voiceover = await generateVoiceoverScript(generatedResult.storyScript, numPrompts, voiceoverLanguage);
+        const targetCharacterCount = videoLengthMinutes * 1000;
+        const voiceover = await generateVoiceoverScript(generatedResult.storyScript, targetCharacterCount);
         setGeneratedResult(prev => prev ? { ...prev, voiceover, voiceoverAudio: undefined } : null); // Reset audio when script changes
         setEditableVoiceoverScript(voiceover);
     } catch (e) {
         console.error(e);
-        setError('An error occurred while generating the voiceover. Please try again.');
+        const errorMessage = e instanceof Error ? e.message : 'An error occurred while generating the voiceover. Please try again.';
+        setError(errorMessage);
     } finally {
         setIsVoiceoverLoading(false);
     }
-  }, [generatedResult, numPrompts, voiceoverLanguage]);
+  }, [generatedResult, videoLengthMinutes]);
 
   const handleEnhanceScript = useCallback(async () => {
     if (!editableVoiceoverScript.trim()) return;
@@ -96,16 +96,14 @@ const App: React.FC = () => {
     try {
         const enhancedScript = await enhanceVoiceoverScript(editableVoiceoverScript);
         setEditableVoiceoverScript(enhancedScript);
-        if (generatedResult) {
-          setGeneratedResult(prev => prev ? { ...prev, voiceover: enhancedScript } : null);
-        }
     } catch (e) {
         console.error(e);
-        setError('An error occurred while enhancing the voiceover script. Please try again.');
+        const errorMessage = e instanceof Error ? e.message : 'An error occurred while enhancing the voiceover script. Please try again.';
+        setError(errorMessage);
     } finally {
         setIsEnhancingScript(false);
     }
-  }, [editableVoiceoverScript, generatedResult]);
+  }, [editableVoiceoverScript]);
   
   const handleGenerateAudio = useCallback(async () => {
     if (!editableVoiceoverScript.trim()) return;
@@ -129,7 +127,8 @@ const App: React.FC = () => {
       });
     } catch (e) {
       console.error(e);
-      setError('An error occurred while generating the audio. Please try again.');
+      const errorMessage = e instanceof Error ? e.message : 'An error occurred while generating the audio. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsAudioLoading(false);
     }
@@ -196,10 +195,10 @@ const App: React.FC = () => {
           setStoryTitle={setStoryTitle}
           storyMode={storyMode}
           setStoryMode={setStoryMode}
+          storyLength={storyLength}
+          setStoryLength={setStoryLength}
           videoLengthMinutes={videoLengthMinutes}
-          setVideoLengthMinutes={handleVideoLengthChange}
-          numPrompts={numPrompts}
-          setNumPrompts={handleNumPromptsChange}
+          setVideoLengthMinutes={setVideoLengthMinutes}
           videoStyle={videoStyle}
           setVideoStyle={setVideoStyle}
           onSubmit={handleGenerate}
@@ -211,8 +210,6 @@ const App: React.FC = () => {
           isEnhancingScript={isEnhancingScript}
           selectedVoice={selectedVoice}
           setSelectedVoice={setSelectedVoice}
-          voiceoverLanguage={voiceoverLanguage}
-          setVoiceoverLanguage={setVoiceoverLanguage}
           onGenerateAudio={handleGenerateAudio}
           isAudioLoading={isAudioLoading}
           editableVoiceoverScript={editableVoiceoverScript}

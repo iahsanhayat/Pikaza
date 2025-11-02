@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CopyIcon, CheckIcon, SparklesIcon, DownloadIcon, PhotoIcon, LoadingSpinnerIcon } from './icons';
-import type { GeneratedResult } from '../types';
+import type { GeneratedResult, GeneratedCharacter } from '../types';
 
 interface PromptDisplayProps {
   result: GeneratedResult | null;
@@ -46,9 +46,56 @@ const renderMarkdown = (markdown: string) => {
     return <div dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+const CharacterPrompt: React.FC<{ character: GeneratedCharacter }> = ({ character }) => {
+    const [isCopied, setIsCopied] = useState(false);
+
+    useEffect(() => {
+        if (isCopied) {
+            const timer = setTimeout(() => setIsCopied(false), 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [isCopied]);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(character.description);
+        setIsCopied(true);
+    };
+
+    return (
+        <div className="p-4 bg-dark-input rounded-xl shadow-soft-inset relative group">
+            <p className="text-sm text-accent font-semibold">{character.name}</p>
+            <p className="text-text-light mt-2 text-sm leading-relaxed">{character.description}</p>
+            <button
+                onClick={handleCopy}
+                className="absolute top-2 right-2 p-2 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition opacity-0 group-hover:opacity-100"
+                aria-label="Copy character prompt"
+                title="Copy prompt"
+            >
+                {isCopied ? <CheckIcon className="w-5 h-5 text-green-400" /> : <CopyIcon className="w-5 h-5" />}
+            </button>
+        </div>
+    );
+};
+
 export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading, error, isThumbnailLoading, onGenerateThumbnail, isThumbnailImageLoading, onGenerateThumbnailImage }) => {
+  const [isCharacterSheetCopied, setIsCharacterSheetCopied] = useState(false);
+  const [isStoryScriptCopied, setIsStoryScriptCopied] = useState(false);
   const [isThumbnailPromptCopied, setIsThumbnailPromptCopied] = useState(false);
   const [isPromptsCopied, setIsPromptsCopied] = useState(false);
+
+  useEffect(() => {
+    if (isCharacterSheetCopied) {
+      const timer = setTimeout(() => setIsCharacterSheetCopied(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isCharacterSheetCopied]);
+
+  useEffect(() => {
+    if (isStoryScriptCopied) {
+      const timer = setTimeout(() => setIsStoryScriptCopied(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [isStoryScriptCopied]);
 
   useEffect(() => {
     if (isThumbnailPromptCopied) {
@@ -64,13 +111,13 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
     }
   }, [isPromptsCopied]);
 
-  const handleCopyThumbnailPrompt = () => {
-    if (result?.thumbnailPrompt) {
-        navigator.clipboard.writeText(result.thumbnailPrompt);
-        setIsThumbnailPromptCopied(true);
+  const handleCopy = (text: string | undefined, setCopied: (isCopied: boolean) => void) => {
+    if (text) {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
     }
   };
-  
+
   const handleCopyAllPrompts = () => {
     if (result?.prompts) {
       const allPrompts = result.prompts.map(p => p.prompt).join('\n\n');
@@ -149,14 +196,23 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                 <div>
                     <div className="flex justify-between items-center">
                         <h2 className="text-2xl font-display font-bold text-text-light">Character Sheet</h2>
-                        <button
-                            onClick={handleDownloadCharacterSheet}
-                            className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition"
-                            aria-label="Download character sheet"
-                            title="Download Character Sheet (.md)"
-                        >
-                            <DownloadIcon className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                           <button
+                                onClick={() => handleCopy(result.characterSheet, setIsCharacterSheetCopied)}
+                                className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition"
+                                title="Copy character sheet"
+                            >
+                                {isCharacterSheetCopied ? <CheckIcon className="w-5 h-5 text-green-400" /> : <CopyIcon className="w-5 h-5" />}
+                            </button>
+                            <button
+                                onClick={handleDownloadCharacterSheet}
+                                className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition"
+                                aria-label="Download character sheet"
+                                title="Download Character Sheet (.md)"
+                            >
+                                <DownloadIcon className="w-5 h-5" />
+                            </button>
+                        </div>
                     </div>
                     <div className="p-6 bg-dark-input rounded-2xl shadow-soft-inset mt-4">
                         {renderMarkdown(result.characterSheet)}
@@ -168,17 +224,37 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                 <div>
                      <div className="flex justify-between items-center">
                         <h2 className="text-2xl font-display font-bold text-text-light">Story Script</h2>
-                         <button
-                            onClick={handleDownloadStoryScript}
-                            className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition"
-                            aria-label="Download story script"
-                            title="Download Story Script (.txt)"
-                        >
-                            <DownloadIcon className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => handleCopy(result.storyScript, setIsStoryScriptCopied)}
+                                className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition"
+                                title="Copy story script"
+                            >
+                                {isStoryScriptCopied ? <CheckIcon className="w-5 h-5 text-green-400" /> : <CopyIcon className="w-5 h-5" />}
+                            </button>
+                            <button
+                                onClick={handleDownloadStoryScript}
+                                className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition"
+                                aria-label="Download story script"
+                                title="Download Story Script (.txt)"
+                            >
+                                <DownloadIcon className="w-5 h-5" />
+                            </button>
+                         </div>
                     </div>
                     <div className="p-6 bg-dark-input rounded-2xl shadow-soft-inset mt-4">
                         {renderMarkdown(result.storyScript)}
+                    </div>
+                </div>
+            )}
+
+            {result.characters && result.characters.length > 0 && (
+                <div>
+                    <h2 className="text-2xl font-display font-bold text-text-light">Generated Character Prompts</h2>
+                    <div className="space-y-4 mt-4">
+                        {result.characters.map((char, index) => (
+                            <CharacterPrompt key={index} character={char} />
+                        ))}
                     </div>
                 </div>
             )}
@@ -246,7 +322,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                                     {result.thumbnailPrompt}
                                 </pre>
                                 <button
-                                    onClick={handleCopyThumbnailPrompt}
+                                    onClick={() => handleCopy(result.thumbnailPrompt, setIsThumbnailPromptCopied)}
                                     className="absolute top-2 right-2 p-2 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition opacity-0 group-hover:opacity-100"
                                     aria-label="Copy thumbnail prompt"
                                     title="Copy prompt"

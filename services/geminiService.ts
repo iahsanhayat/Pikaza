@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, GenerateContentResponse, HarmCategory, HarmBlockThreshold, Modality } from "@google/genai";
-import type { CharacterProfile, ScenePrompt } from '../types';
+import type { CharacterProfile, GeneratedResult } from '../types';
 
 // This global instance is used for operations not requiring user-specific API keys.
 const aiGlobal = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -47,27 +47,51 @@ function handleApiError(error: unknown, context: string): Error {
 interface GenerateOptions {
   characters: CharacterProfile[];
   numPrompts: number;
-  mode: 'detail' | 'quick';
+  mode: 'detail' | 'fromTitle';
   sceneOrTitle: string;
   videoStyle: string;
+  storyLength: 'Short' | 'Medium' | 'Long';
 }
 
 export async function generateStoryAndPrompts(
   options: GenerateOptions
-): Promise<{ characterSheet: string; storyScript?: string; prompts: ScenePrompt[] }> {
+): Promise<GeneratedResult> {
   
-  const { characters, numPrompts, mode, sceneOrTitle, videoStyle } = options;
+  const { characters, numPrompts, mode, sceneOrTitle, videoStyle, storyLength } = options;
 
-  const schema = {
+  const fromTitleSchema = {
+    type: Type.OBJECT,
+    properties: {
+        characterSheet: {
+            type: Type.STRING,
+            description: "A single Markdown document containing the detailed, reusable character sheets for all characters invented by the AI."
+        },
+        storyScript: {
+            type: Type.STRING,
+            description: "The full story script, written out as a narrative based on the provided title."
+        },
+        characters: {
+            type: Type.ARRAY,
+            description: "A list of JSON objects, each representing a generated character with their name and a detailed, copyable prompt-style description.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING, description: "The name of the generated character." },
+                    description: { type: Type.STRING, description: "A detailed, self-contained description of the character's appearance, suitable for use as a prompt." }
+                },
+                required: ['name', 'description']
+            }
+        }
+    },
+    required: ['characterSheet', 'storyScript', 'characters']
+  };
+
+  const detailSchema = {
     type: Type.OBJECT,
     properties: {
       characterSheet: {
         type: Type.STRING,
         description: "A single Markdown document containing the detailed, reusable character sheets for all characters."
-      },
-      storyScript: {
-        type: Type.STRING,
-        description: "The full story script, written out as a narrative."
       },
       prompts: {
         type: Type.ARRAY,
@@ -84,48 +108,44 @@ export async function generateStoryAndPrompts(
         }
       }
     },
-    required: ['characterSheet', 'storyScript', 'prompts']
+    required: ['characterSheet', 'prompts']
   };
+  
+  const schema = mode === 'fromTitle' ? fromTitleSchema : detailSchema;
   
   const characterDetails = characters.map(c => `- Name: ${c.name || 'Unnamed'}\n  - Key Physical Appearance Details: ${c.appearance}`).join('\n');
 
-
   const masterPrompt = `
     You are an expert prompt engineer and a creative storyteller.
-    Your task is to generate character sheets, a story, and a series of JSON prompts based on user input for one or more characters.
+    Your task is to generate content based on user input.
     The final output must be a JSON object matching the provided schema.
-    CRITICAL RULE: For the story script and prompts, ALWAYS use the character's name. DO NOT use pronouns like 'he', 'she', or 'they' to refer to them. This is crucial for consistency.
+    Desired Video Style for any visual descriptions: ${videoStyle}
 
-    **Character Details Provided:**
-    ${characterDetails}
+    ${mode === 'fromTitle' ? `
+    **Mode: From Title**
+    - Story Title: "${sceneOrTitle}"
+    - Desired Story Length: ${storyLength}
 
-    **Task Details:**
-    - Desired Video Style: ${videoStyle}
-    - Number of Image Prompts to Generate: ${numPrompts}
-    - Assumed scene duration: 8 seconds.
-
-    ${mode === 'quick' ? `
-    **Mode: Quick Story**
-    - Story Premise: "${sceneOrTitle}"
-    1.  First, write a short, compelling story based on the premise involving the provided character(s). The story should be detailed enough to be broken into ${numPrompts} distinct scenes.
-    2.  Based on the story, create a highly detailed, descriptive "Character Sheet" for **EACH** character. This sheet is crucial for visual consistency. Use specific keywords for an AI image generator. Break it down into logical categories (e.g., 'Face', 'Hair', 'Attire'). Combine all character sheets into a single markdown string under a main "Character Sheets" heading.
-    3.  Finally, break your story down into ${numPrompts} chronological scenes and write one detailed JSON object for each scene.
-    4.  **CRITICAL RULE for each JSON object:**
-        -   \`scene_number\`: The chronological order of the scene, starting from 1.
-        -   \`start_time_seconds\` and \`end_time_seconds\`: Calculate these based on an 8-second duration for each scene (e.g., scene 1 is 0-8s, scene 2 is 8-16s, etc.).
-        -   \`prompt\`: This string MUST begin with the video style: "${videoStyle}". Then, for **ANY** character mentioned by name, you **MUST** include their detailed appearance from their character sheet to maintain consistency. This should be followed by a description of the action, environment, lighting, and mood. The prompt string MUST end with "--ar 16:9".
-    5.  Populate the 'characterSheet', 'storyScript', and 'prompts' fields in the JSON output.
+    1.  **Invent Characters:** Based on the story title, invent at least two compelling characters that fit the theme.
+    2.  **Create Character Sheets:** Write a highly detailed, descriptive "Character Sheet" for **EACH** invented character. This sheet is crucial for visual consistency. Use specific keywords for an AI image generator. Break it down into logical categories (e.g., 'Face', 'Hair', 'Attire'). Combine all character sheets into a single markdown string under a main "Character Sheets" heading.
+    3.  **Write Story Script:** Write a ${storyLength}, compelling story based on the title and the characters you invented.
+    4.  **Generate Character Descriptions:** For each character you invented, create a separate JSON object containing their name and a detailed, self-contained, prompt-style description of their appearance. This description should be dense with visual keywords.
+    5.  **Final JSON:** Populate the 'characterSheet', 'storyScript', and 'characters' fields in the JSON output. Do NOT generate 'prompts'.
     ` : `
     **Mode: Detailed Scene**
     - Scene Description: "${sceneOrTitle}"
+    - Character Details Provided:
+      ${characterDetails}
+    - Number of Image Prompts to Generate: ${numPrompts}
+    - Assumed scene duration: 8 seconds.
+    
     1.  First, create a highly detailed, descriptive "Character Sheet" for **EACH** character based on the details provided. This sheet is crucial for visual consistency. Use specific keywords for an AI image generator. Break it down into logical categories (e.g., 'Face', 'Hair', 'Attire'). Combine all character sheets into a single markdown string under a main "Character Sheets" heading.
-    2.  Then, write a short narrative story script that describes what happens in this scene. The story should be detailed enough to be broken into ${numPrompts} distinct scenes.
-    3.  Then, based on the story you just wrote, generate ${numPrompts} distinct, sequential JSON prompt objects that depict the unfolding action within that scene. Imagine it as a short storyboard.
-    4.  **CRITICAL RULE for each JSON object:**
+    2.  Then, based on the scene description, generate ${numPrompts} distinct, sequential JSON prompt objects that depict the unfolding action within that scene. Imagine it as a short storyboard.
+    3.  **CRITICAL RULE for each JSON prompt object:**
         -   \`scene_number\`: The chronological order of the scene, starting from 1.
         -   \`start_time_seconds\` and \`end_time_seconds\`: Calculate these based on an 8-second duration for each scene (e.g., scene 1 is 0-8s, scene 2 is 8-16s, etc.).
         -   \`prompt\`: This string MUST begin with the video style: "${videoStyle}". Then, for **ANY** character mentioned by name, you **MUST** include their detailed appearance from their character sheet to maintain consistency. This should be followed by a description of the action, environment, lighting, and mood. The prompt string MUST end with "--ar 16:9".
-    5.  Populate the 'characterSheet', 'storyScript', and 'prompts' fields in the JSON output.
+    4.  Populate the 'characterSheet' and 'prompts' fields in the JSON output. Do not generate a 'storyScript' or 'characters'.
     `}
   `;
 
@@ -151,6 +171,14 @@ export async function generateStoryAndPrompts(
     }
 
     const result = JSON.parse(jsonText.trim());
+
+    if(mode === 'detail' && (result.storyScript || result.characters)) {
+        delete result.storyScript;
+        delete result.characters;
+    }
+    if (mode === 'fromTitle' && result.prompts) {
+        delete result.prompts;
+    }
     
     return result;
 
@@ -162,30 +190,24 @@ export async function generateStoryAndPrompts(
   }
 }
 
-export async function generateVoiceoverScript(storyScript: string, numPrompts: number, language: string): Promise<string> {
-  const minWords = numPrompts * 20;
-  const maxWords = numPrompts * 25;
+export async function generateVoiceoverScript(storyScript: string, targetCharacterCount: number): Promise<string> {
   const prompt = `
-    You are a creative storyteller and an expert voiceover scriptwriter. Your task is to rewrite the following story script into a captivating voiceover script that is perfectly timed for a video. The source script may overuse character names; you should rewrite it to use a natural mix of names and pronouns.
+    You are a creative storyteller for children. Your task is to rewrite the following story script into a captivating voiceover script for a kids' video.
 
     **Instructions:**
-    1.  **Language**: The entire voiceover script MUST be written in ${language}.
-    2.  **Natural Language:** Rewrite the story to sound natural when spoken. Use a mix of character names and pronouns (he, she, they) appropriately.
-    3.  **Pacing and Timing (NON-NEGOTIABLE):**
-        - The video has ${numPrompts} scenes, each lasting 8 seconds.
-        - A comfortable speaking pace is about 20-25 words per 8 seconds.
-        - Therefore, the total script length MUST be between ${minWords} and ${maxWords} words.
-        - **This is the most critical rule. It is better to be slightly under the word count than over. Be concise. Cut any unnecessary words or sentences to meet this timing requirement.**
-    4.  **Tone:** The tone should be friendly, warm, and engaging.
+    1.  **Engaging Hook:** Start with a hook! Ask a question or present a mysterious statement to make kids curious and want to watch the whole video.
+    2.  **Simple Language:** Use simple, easy-to-understand words that a young child can follow. Keep sentences short and clear.
+    3.  **Kid-Friendly Tone:** The tone should be friendly, warm, and exciting.
+    4.  **Character Limit:** **CRITICAL REQUIREMENT:** The final voiceover script MUST NOT exceed ${targetCharacterCount} characters. You must be concise.
     5.  **Core Story:** Preserve the main events and feelings of the story.
-    6.  **Format:** Write it as a single, flowing paragraph ready for a voice actor to read. Do not include any headings, scene numbers, or an introductory hook. Start directly with the story's narration.
+    6.  **Format:** Write it as a single, flowing paragraph ready for a voice actor to read. Do not include any headings or scene numbers.
 
     **Original Story:**
     ---
     ${storyScript}
     ---
 
-    **${language} Voiceover Script (Between ${minWords} and ${maxWords} words):**
+    **Kids' Voiceover Script (MAX ${targetCharacterCount} characters):**
   `;
 
   try {
@@ -215,14 +237,13 @@ export async function generateVoiceoverScript(storyScript: string, numPrompts: n
 
 export async function enhanceVoiceoverScript(script: string): Promise<string> {
   const prompt = `
-    You are an expert voiceover script editor. Your task is to subtly enhance the following script to improve its spoken flow and pacing for a voice actor.
-    The goal is a natural, conversational delivery.
-
-    **Instructions:**
-    1.  **Improve Flow:** You may slightly rephrase sentences or break up long sentences to make them easier to read aloud and sound more natural.
-    2.  **Add Pauses:** Use punctuation like commas (,), em dashes (—), and ellipses (...) to create natural pauses and improve the rhythm.
-    3.  **DO NOT add parenthetical cues:** Do not add instructions in parentheses like (pause) or (excitedly). The pacing should be controlled only through text and punctuation.
-    4.  **Preserve Meaning:** The core meaning and intent of the original script must be preserved.
+    You are an expert voiceover director. Your goal is to make the voice actor's performance sound like a calm, conversational, and mature storyteller. The delivery should have a natural flow, not be overly dramatic or deep-voiced.
+    Your task is to subtly enhance the following script to guide the voice actor.
+    - Insert expressive cues in parentheses to guide the tone towards a calm, conversational style. Examples: (calmly), (thoughtfully), (gently), (as if reminiscing).
+    - Use ellipses (...) and strategic commas to create a natural, smooth-flowing pace. Avoid abrupt stops.
+    - The focus is on clarity and a pleasant, engaging listening experience, not on a deep, booming narrator voice.
+    - **CRITICAL:** You must not change any of the original words of the script. Your role is only to add the parenthetical cues and punctuation for pacing.
+    - The goal is a performance that feels authentic, human, and easy to listen to.
 
     **Script to Enhance:**
     ---

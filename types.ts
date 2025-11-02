@@ -10,10 +10,16 @@ export interface ScenePrompt {
   prompt: string;
 }
 
+export interface GeneratedCharacter {
+    name: string;
+    description: string;
+}
+
 export interface GeneratedResult {
   characterSheet: string;
   storyScript?: string;
-  prompts: ScenePrompt[];
+  prompts?: ScenePrompt[];
+  characters?: GeneratedCharacter[];
   voiceover?: string;
   voiceoverAudio?: string;
   thumbnailPrompt?: string;
