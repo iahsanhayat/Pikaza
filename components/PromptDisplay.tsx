@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CopyIcon, CheckIcon, SparklesIcon, DownloadIcon, PhotoIcon, LoadingSpinnerIcon } from './icons';
+import { CopyIcon, CheckIcon, SparklesIcon, DownloadIcon } from './icons';
 import type { GeneratedResult, GeneratedCharacter } from '../types';
 
 interface PromptDisplayProps {
@@ -8,8 +8,6 @@ interface PromptDisplayProps {
   error: string | null;
   isThumbnailLoading: boolean;
   onGenerateThumbnail: () => void;
-  isThumbnailImageLoading: boolean;
-  onGenerateThumbnailImage: () => void;
 }
 
 const LoadingSkeleton: React.FC = () => (
@@ -77,11 +75,86 @@ const CharacterPrompt: React.FC<{ character: GeneratedCharacter }> = ({ characte
     );
 };
 
-export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading, error, isThumbnailLoading, onGenerateThumbnail, isThumbnailImageLoading, onGenerateThumbnailImage }) => {
+const RomanUrduStoryDisplay: React.FC<{ result: GeneratedResult }> = ({ result }) => {
+    const [isCopied, setIsCopied] = useState(false);
+    
+    const textToCopy = result.storyScriptRomanUrdu || '';
+
+    const handleCopy = () => {
+        if (textToCopy) {
+            navigator.clipboard.writeText(textToCopy);
+            setIsCopied(true);
+        }
+    };
+
+    useEffect(() => {
+        if (isCopied) {
+            const timer = setTimeout(() => setIsCopied(false), 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [isCopied]);
+
+    return (
+        <div>
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-display font-bold text-text-light">Roman Urdu Story</h2>
+                <button
+                    onClick={handleCopy}
+                    className="p-3 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition"
+                    title="Copy Roman Urdu Story"
+                >
+                    {isCopied ? <CheckIcon className="w-5 h-5 text-green-400" /> : <CopyIcon className="w-5 h-5" />}
+                </button>
+            </div>
+            <div className="p-6 bg-dark-input rounded-2xl shadow-soft-inset mt-4 space-y-4">
+                <p className="text-text-light/90 leading-relaxed">{result.storyScriptRomanUrdu}</p>
+            </div>
+        </div>
+    )
+}
+
+const TitleSuggestionItem: React.FC<{ title: string }> = ({ title }) => {
+    const [isCopied, setIsCopied] = useState(false);
+
+    useEffect(() => {
+        if (isCopied) {
+            const timer = setTimeout(() => setIsCopied(false), 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [isCopied]);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(title);
+        setIsCopied(true);
+    };
+
+    return (
+        <div className="p-3 bg-dark-bg rounded-xl shadow-soft-inset flex items-center justify-between group">
+            <p className="text-sm text-text-light">{title}</p>
+            <button
+                onClick={handleCopy}
+                className="p-2 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition opacity-0 group-hover:opacity-100"
+                aria-label="Copy title"
+                title="Copy title"
+            >
+                {isCopied ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
+            </button>
+        </div>
+    );
+};
+
+
+export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading, error, isThumbnailLoading, onGenerateThumbnail }) => {
   const [isCharacterSheetCopied, setIsCharacterSheetCopied] = useState(false);
   const [isStoryScriptCopied, setIsStoryScriptCopied] = useState(false);
-  const [isThumbnailPromptCopied, setIsThumbnailPromptCopied] = useState(false);
   const [isPromptsCopied, setIsPromptsCopied] = useState(false);
+  
+  const LoadingSpinnerIcon: React.FC = () => (
+    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+  );
 
   useEffect(() => {
     if (isCharacterSheetCopied) {
@@ -96,13 +169,6 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
       return () => clearTimeout(timer);
     }
   }, [isStoryScriptCopied]);
-
-  useEffect(() => {
-    if (isThumbnailPromptCopied) {
-      const timer = setTimeout(() => setIsThumbnailPromptCopied(false), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [isThumbnailPromptCopied]);
   
   useEffect(() => {
     if (isPromptsCopied) {
@@ -171,11 +237,11 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
     }
   };
 
-  const handleDownloadThumbnailImage = () => {
-    if (result?.thumbnailImage) {
+  const handleDownloadThumbnail = (base64Image: string | undefined, filename: string) => {
+    if (base64Image) {
         const link = document.createElement('a');
-        link.href = `data:image/jpeg;base64,${result.thumbnailImage}`;
-        link.download = 'thumbnail.jpeg';
+        link.href = `data:image/jpeg;base64,${base64Image}`;
+        link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -223,7 +289,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
             {result.storyScript && (
                 <div>
                      <div className="flex justify-between items-center">
-                        <h2 className="text-2xl font-display font-bold text-text-light">Story Script</h2>
+                        <h2 className="text-2xl font-display font-bold text-text-light">Story Script (English)</h2>
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => handleCopy(result.storyScript, setIsStoryScriptCopied)}
@@ -247,6 +313,8 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                     </div>
                 </div>
             )}
+
+            {result.storyScriptRomanUrdu && <RomanUrduStoryDisplay result={result} />}
 
             {result.characters && result.characters.length > 0 && (
                 <div>
@@ -291,65 +359,91 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
               </div>
             )}
             
-            {result.characterSheet && (
+            {(result.characterSheet || result.storyScript || result.thumbnail3d || result.standaloneThumbnail) && (
                  <div>
-                    <h2 className="text-2xl font-display font-bold text-text-light">Thumbnail</h2>
+                    <h2 className="text-2xl font-display font-bold text-text-light">Thumbnails & Titles</h2>
                     <div className="p-6 bg-dark-input rounded-2xl shadow-soft-inset mt-4">
-                       {isThumbnailImageLoading ? (
-                            <div className="flex items-center justify-center text-text-medium py-8">
-                                <LoadingSpinnerIcon />
-                                <span className="ml-2">Generating 4K thumbnail image...</span>
-                            </div>
-                        ) : result.thumbnailImage ? (
-                            <div className="space-y-4">
-                                <img src={`data:image/jpeg;base64,${result.thumbnailImage}`} alt="Generated Thumbnail" className="rounded-lg w-full shadow-lg" />
-                                <button
-                                    type="button"
-                                    onClick={handleDownloadThumbnailImage}
-                                    className="flex items-center justify-center w-full gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent focus:outline-none transition"
-                                >
-                                    <DownloadIcon className="w-5 h-5" /> Download Image
-                                </button>
-                            </div>
-                        ) : isThumbnailLoading ? (
-                             <div className="flex items-center justify-center text-text-medium py-2">
-                                <LoadingSpinnerIcon />
-                                <span className="ml-2">Generating prompt...</span>
-                            </div>
-                        ) : result.thumbnailPrompt ? (
-                            <div className="relative group">
-                                <pre className="whitespace-pre-wrap bg-dark-bg p-4 rounded-lg text-sm font-mono text-text-light">
-                                    {result.thumbnailPrompt}
-                                </pre>
-                                <button
-                                    onClick={() => handleCopy(result.thumbnailPrompt, setIsThumbnailPromptCopied)}
-                                    className="absolute top-2 right-2 p-2 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition opacity-0 group-hover:opacity-100"
-                                    aria-label="Copy thumbnail prompt"
-                                    title="Copy prompt"
-                                >
-                                    {isThumbnailPromptCopied ? <CheckIcon className="w-5 h-5 text-green-400" /> : <CopyIcon className="w-5 h-5" />}
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 p-4">
-                                <button
-                                    type="button"
-                                    onClick={onGenerateThumbnail}
-                                    disabled={isThumbnailLoading}
-                                    className="flex w-full sm:w-auto items-center justify-center mx-auto gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
-                                >
-                                    <SparklesIcon className="w-5 h-5" /> Generate Prompt
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={onGenerateThumbnailImage}
-                                    disabled={isThumbnailImageLoading}
-                                    className="flex w-full sm:w-auto items-center justify-center mx-auto gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-dark-bg bg-accent shadow-soft-outset hover:opacity-90 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
-                                >
-                                    <PhotoIcon className="w-5 h-5" /> Generate 4K Image
-                                </button>
-                            </div>
-                        )}
+                        <div className="space-y-6">
+                            {isThumbnailLoading ? (
+                                <div className="flex items-center justify-center text-text-medium py-8">
+                                    <LoadingSpinnerIcon />
+                                    <span className="ml-2">Generating thumbnails & titles...</span>
+                                </div>
+                            ) : (
+                                <>
+                                    {(result.thumbnail3d || result.thumbnailRealistic) && (
+                                        <div>
+                                            <h3 className="text-lg font-display font-bold text-accent mb-2">Generated Thumbnails</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {result.thumbnail3d && (
+                                                    <div className="space-y-2">
+                                                        <img src={`data:image/jpeg;base64,${result.thumbnail3d}`} alt="3D Pixar Style Thumbnail" className="rounded-lg w-full shadow-lg" />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDownloadThumbnail(result.thumbnail3d, 'thumbnail_3d.jpeg')}
+                                                            className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-xs font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent transition"
+                                                        >
+                                                            <DownloadIcon className="w-4 h-4" /> 3D Pixar Style
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {result.thumbnailRealistic && (
+                                                    <div className="space-y-2">
+                                                        <img src={`data:image/jpeg;base64,${result.thumbnailRealistic}`} alt="Realistic Photo Style Thumbnail" className="rounded-lg w-full shadow-lg" />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDownloadThumbnail(result.thumbnailRealistic, 'thumbnail_realistic.jpeg')}
+                                                            className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-xs font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent transition"
+                                                        >
+                                                            <DownloadIcon className="w-4 h-4" /> Realistic Photo Style
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {result.titles && (
+                                        <div>
+                                            <h3 className="text-lg font-display font-bold text-accent mb-2">Title Suggestions</h3>
+                                            <div className="space-y-2">
+                                                {result.titles.map((title, index) => (
+                                                    <TitleSuggestionItem key={index} title={title} />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                            
+                            {result.standaloneThumbnail && (
+                                <div>
+                                    <h3 className="text-lg font-display font-bold text-accent mb-2">Standalone Thumbnail</h3>
+                                    <div className="space-y-2">
+                                        <img src={`data:image/jpeg;base64,${result.standaloneThumbnail}`} alt="Standalone Thumbnail" className="rounded-lg w-full shadow-lg" />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDownloadThumbnail(result.standaloneThumbnail, 'standalone_thumbnail.jpeg')}
+                                            className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-xs font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent transition"
+                                        >
+                                            <DownloadIcon className="w-4 h-4" /> Download Thumbnail
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {!(result.thumbnail3d || result.thumbnailRealistic || result.titles) && !isThumbnailLoading && result.characterSheet && (
+                                <div className="flex flex-col sm:flex-row items-center justify-center gap-4 p-4">
+                                    <button
+                                        type="button"
+                                        onClick={onGenerateThumbnail}
+                                        disabled={isThumbnailLoading}
+                                        className="flex w-full items-center justify-center mx-auto gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-bg shadow-soft-outset hover:text-accent focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                    >
+                                        <SparklesIcon className="w-5 h-5" /> Generate Thumbnails & Titles
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

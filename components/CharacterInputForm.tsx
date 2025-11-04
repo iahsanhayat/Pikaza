@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { CharacterProfile, GeneratedResult } from '../types';
-import { LoadingSpinnerIcon, MicIcon, PlayIcon, PauseIcon, DownloadIcon, SparklesIcon, TrashIcon } from './icons';
+import { LoadingSpinnerIcon, MicIcon, PlayIcon, PauseIcon, DownloadIcon, SparklesIcon, TrashIcon, PhotoIcon } from './icons';
 import { generateAudioFromScript } from '../services/geminiService';
 
 interface CharacterInputFormProps {
@@ -33,6 +33,10 @@ interface CharacterInputFormProps {
   setEditableVoiceoverScript: React.Dispatch<React.SetStateAction<string>>;
   voiceoverScriptInput: string;
   setVoiceoverScriptInput: React.Dispatch<React.SetStateAction<string>>;
+  thumbnailPrompt: string;
+  setThumbnailPrompt: React.Dispatch<React.SetStateAction<string>>;
+  onGenerateStandaloneThumbnail: () => void;
+  isStandaloneThumbnailLoading: boolean;
 }
 
 const InputField: React.FC<{
@@ -203,6 +207,10 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   setEditableVoiceoverScript,
   voiceoverScriptInput,
   setVoiceoverScriptInput,
+  thumbnailPrompt,
+  setThumbnailPrompt,
+  onGenerateStandaloneThumbnail,
+  isStandaloneThumbnailLoading,
 }) => {
   const [activeStep, setActiveStep] = useState(1);
   const [playbackRate, setPlaybackRate] = useState(1.0);
@@ -385,7 +393,7 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
     { step: 1, title: 'Define Characters & Story' },
     { step: 2, title: 'Define Video Style' },
     { step: 3, title: 'Configure Video Output' },
-    { step: 4, title: 'Generate Voiceover' },
+    { step: 4, title: 'Generate Voiceover & Thumbnail' },
   ];
   
   const isSubmitDisabled = isLoading || (storyMode === 'detail'
@@ -518,7 +526,7 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                 )}
                 {activeStep === 4 && (
                     <div className="space-y-6">
-                        <h2 className="text-2xl font-bold font-display text-text-light">4. Generate Voiceover</h2>
+                        <h2 className="text-2xl font-bold font-display text-text-light">4. Generate Voiceover & Thumbnail</h2>
                         <>
                             <p className="text-text-medium">Generate a voiceover script from your story, or write your own.</p>
                             <button
@@ -632,6 +640,31 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                                 )}
                             </div>
                         </>
+                        <hr className="border-white/10 my-8" />
+                        <div className="space-y-4">
+                            <h3 className="text-xl font-bold font-display text-text-light">Standalone Thumbnail</h3>
+                            <p className="text-text-medium text-sm">Generate a high-quality thumbnail from a title or an idea, independent of the main story.</p>
+                            <TextareaField
+                                id="thumbnail-prompt"
+                                label="Thumbnail Idea or Title"
+                                value={thumbnailPrompt}
+                                onChange={(e) => setThumbnailPrompt(e.target.value)}
+                                rows={3}
+                                placeholder="e.g., A small robot discovers a glowing flower in a dark forest"
+                            />
+                            <button
+                                type="button"
+                                onClick={onGenerateStandaloneThumbnail}
+                                disabled={isStandaloneThumbnailLoading || !thumbnailPrompt.trim()}
+                                className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-input shadow-soft-outset hover:text-accent focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
+                            >
+                                {isStandaloneThumbnailLoading ? (
+                                    <><LoadingSpinnerIcon /> Generating Thumbnail...</>
+                                ) : (
+                                    <><PhotoIcon className="w-4 h-4" /> Generate High-Quality Thumbnail</>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

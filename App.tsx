@@ -1,9 +1,8 @@
 import React, { useState, useCallback } from 'react';
-// FIX: Import CharacterProfile type.
 import type { GeneratedResult, CharacterProfile } from './types';
 import { CharacterInputForm } from './components/CharacterInputForm';
 import { PromptDisplay } from './components/PromptDisplay';
-import { generateStoryAndPrompts, generateVoiceoverScript, generateAudioFromScript, enhanceVoiceoverScript, generateThumbnailPrompt, generateThumbnailImage } from './services/geminiService';
+import { generateStoryAndPrompts, generateVoiceoverScript, generateAudioFromScript, enhanceVoiceoverScript, generateThumbnailsAndTitles, generateStandaloneThumbnail } from './services/geminiService';
 
 const App: React.FC = () => {
   const [characterProfiles, setCharacterProfiles] = useState<CharacterProfile[]>([{
@@ -18,6 +17,7 @@ const App: React.FC = () => {
   const [videoStyle, setVideoStyle] = useState<string>('3D Pixar style');
   const [selectedVoice, setSelectedVoice] = useState<string>('Zephyr');
   const [voiceoverScriptInput, setVoiceoverScriptInput] = useState<string>('');
+  const [thumbnailPrompt, setThumbnailPrompt] = useState<string>('');
 
   const [generatedResult, setGeneratedResult] = useState<GeneratedResult | null>(null);
   const [editableVoiceoverScript, setEditableVoiceoverScript] = useState<string>('');
@@ -26,7 +26,7 @@ const App: React.FC = () => {
   const [isEnhancingScript, setIsEnhancingScript] = useState<boolean>(false);
   const [isAudioLoading, setIsAudioLoading] = useState<boolean>(false);
   const [isThumbnailLoading, setIsThumbnailLoading] = useState<boolean>(false);
-  const [isThumbnailImageLoading, setIsThumbnailImageLoading] = useState<boolean>(false);
+  const [isStandaloneThumbnailLoading, setIsStandaloneThumbnailLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = useCallback(async () => {
@@ -132,6 +132,7 @@ const App: React.FC = () => {
           // Otherwise, create a new minimal result object for the standalone audio
           return {
               characterSheet: '',
+              storyScript: '',
               prompts: [],
               voiceover: editableVoiceoverScript,
               voiceoverAudio: audioB64,
@@ -152,41 +153,40 @@ const App: React.FC = () => {
     setIsThumbnailLoading(true);
     setError(null);
     try {
-      const thumbnailPrompt = await generateThumbnailPrompt(
+      const { thumbnail3d, thumbnailRealistic, titles } = await generateThumbnailsAndTitles(
         generatedResult.characterSheet, 
-        generatedResult.storyScript,
-        videoStyle,
-        storyTitle
+        generatedResult.storyScript
       );
-      setGeneratedResult(prev => prev ? { ...prev, thumbnailPrompt } : null);
+      setGeneratedResult(prev => prev ? { ...prev, thumbnail3d, thumbnailRealistic, titles } : null);
     } catch (e) {
         const errorMessage = e instanceof Error ? e.message : 'Please try again.';
-        setError(`An error occurred while generating the thumbnail prompt. ${errorMessage}`);
+        setError(`An error occurred while generating thumbnails and titles. ${errorMessage}`);
     } finally {
       setIsThumbnailLoading(false);
     }
-  }, [generatedResult, videoStyle, storyTitle]);
+  }, [generatedResult]);
 
-  const handleGenerateThumbnailImage = useCallback(async () => {
-    if (!generatedResult?.characterSheet) return;
-  
-    setIsThumbnailImageLoading(true);
+  const handleGenerateStandaloneThumbnail = useCallback(async () => {
+    if (!thumbnailPrompt.trim()) {
+      setError("Please provide an idea or title for the thumbnail.");
+      return;
+    }
+    setIsStandaloneThumbnailLoading(true);
     setError(null);
     try {
-      const thumbnailImage = await generateThumbnailImage(
-        generatedResult.characterSheet, 
-        generatedResult.storyScript,
-        videoStyle,
-        storyTitle
-      );
-      setGeneratedResult(prev => prev ? { ...prev, thumbnailImage } : null);
+        const imageB64 = await generateStandaloneThumbnail(thumbnailPrompt);
+        setGeneratedResult(prev => ({
+            ...(prev || { characterSheet: '', storyScript: '', prompts: [] }),
+            standaloneThumbnail: imageB64
+        }));
     } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : 'Please try again.';
-        setError(`An error occurred while generating the thumbnail image. ${errorMessage}`);
+        console.error(e);
+        const errorMessage = e instanceof Error ? e.message : 'An error occurred while generating the thumbnail. Please try again.';
+        setError(errorMessage);
     } finally {
-      setIsThumbnailImageLoading(false);
+        setIsStandaloneThumbnailLoading(false);
     }
-  }, [generatedResult, videoStyle, storyTitle]);
+  }, [thumbnailPrompt]);
 
   return (
     <div className="min-h-screen bg-dark-bg text-text-light flex flex-col">
@@ -218,16 +218,22 @@ const App: React.FC = () => {
           result={generatedResult}
           onGenerateVoiceover={handleGenerateVoiceover}
           isVoiceoverLoading={isVoiceoverLoading}
+          // FIX: Pass the correct handler function to the onEnhanceScript prop.
           onEnhanceScript={handleEnhanceScript}
           isEnhancingScript={isEnhancingScript}
           selectedVoice={selectedVoice}
           setSelectedVoice={setSelectedVoice}
+          // FIX: Pass the correct handler function to the onGenerateAudio prop.
           onGenerateAudio={handleGenerateAudio}
           isAudioLoading={isAudioLoading}
           editableVoiceoverScript={editableVoiceoverScript}
           setEditableVoiceoverScript={setEditableVoiceoverScript}
           voiceoverScriptInput={voiceoverScriptInput}
           setVoiceoverScriptInput={setVoiceoverScriptInput}
+          thumbnailPrompt={thumbnailPrompt}
+          setThumbnailPrompt={setThumbnailPrompt}
+          onGenerateStandaloneThumbnail={handleGenerateStandaloneThumbnail}
+          isStandaloneThumbnailLoading={isStandaloneThumbnailLoading}
         />
         <PromptDisplay
           result={generatedResult}
@@ -235,8 +241,6 @@ const App: React.FC = () => {
           error={error}
           isThumbnailLoading={isThumbnailLoading}
           onGenerateThumbnail={handleGenerateThumbnail}
-          isThumbnailImageLoading={isThumbnailImageLoading}
-          onGenerateThumbnailImage={handleGenerateThumbnailImage}
         />
       </main>
     </div>

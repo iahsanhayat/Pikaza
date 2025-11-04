@@ -68,7 +68,7 @@ export async function generateStoryAndPrompts(
         },
         storyScript: {
             type: Type.STRING,
-            description: "The full story script, written out as a narrative based on the provided title."
+            description: "The full story script, written out as a narrative in English based on the provided title."
         },
         characters: {
             type: Type.ARRAY,
@@ -81,9 +81,13 @@ export async function generateStoryAndPrompts(
                 },
                 required: ['name', 'description']
             }
+        },
+        storyScriptRomanUrdu: {
+            type: Type.STRING,
+            description: "The full story script, translated into Roman Urdu."
         }
     },
-    required: ['characterSheet', 'storyScript', 'characters']
+    required: ['characterSheet', 'storyScript', 'characters', 'storyScriptRomanUrdu']
   };
 
   const detailSchema = {
@@ -120,7 +124,7 @@ export async function generateStoryAndPrompts(
         },
         storyScript: {
             type: Type.STRING,
-            description: "The full story script, written as a narrative based on the provided voiceover script."
+            description: "The full story script, written as a narrative in English based on the provided voiceover script."
         },
         characters: {
             type: Type.ARRAY,
@@ -147,9 +151,13 @@ export async function generateStoryAndPrompts(
             },
             required: ['scene_number', 'start_time_seconds', 'end_time_seconds', 'prompt']
           }
+        },
+        storyScriptRomanUrdu: {
+            type: Type.STRING,
+            description: "The full story script, translated into Roman Urdu."
         }
     },
-    required: ['characterSheet', 'storyScript', 'characters', 'prompts']
+    required: ['characterSheet', 'storyScript', 'characters', 'prompts', 'storyScriptRomanUrdu']
 };
   
   let schema;
@@ -161,7 +169,7 @@ export async function generateStoryAndPrompts(
     case 'fromVoiceover':
         schema = fromVoiceoverSchema;
         masterPrompt = `
-          You are an expert prompt engineer and a creative storyteller. Your task is to generate content based on a provided voiceover script.
+          You are an expert prompt engineer and a creative storyteller for kids. Your task is to generate content based on a provided voiceover script.
           The final output must be a JSON object matching the provided schema.
           Desired Video Style for any visual descriptions: ${videoStyle}
   
@@ -171,19 +179,26 @@ export async function generateStoryAndPrompts(
   
           1.  **Analyze Script & Identify Characters:** Read the voiceover script carefully. Identify all characters that are mentioned more than one time.
           2.  **Invent & Create Character Sheets:** For each identified character, invent a detailed visual appearance. Write a highly descriptive "Character Sheet" for **EACH** invented character. This sheet is crucial for visual consistency. Use specific keywords for an AI image generator. Combine all character sheets into a single markdown string under a main "Character Sheets" heading.
-          3.  **Write Story Script:** Based on the voiceover, write a full narrative story script that expands on the events. This story should logically flow and be divisible into ${numPrompts} scenes.
-          4.  **Generate Character Descriptions:** For each character you invented, create a separate JSON object containing their name and a detailed, self-contained, prompt-style description of their appearance.
-          5.  **Generate Video Prompts:** Break down the story into ${numPrompts} sequential scenes. For each scene, create a JSON prompt object.
-          6.  **CRITICAL RULE for each prompt object:**
+          3.  **Write Story Script:** Based on the voiceover, write a full narrative story script in English that expands on the events. This story should logically flow and be divisible into ${numPrompts} scenes.
+          4.  **Translate Story:** Translate the entire English story script into Roman Urdu (using the English alphabet).
+          5.  **Generate Character Descriptions:** For each character you invented, create a separate JSON object containing their name and a detailed, self-contained, prompt-style description of their appearance.
+          6.  **Generate Video Prompts:** Break down the story into ${numPrompts} sequential scenes. For each scene, create a JSON prompt object.
+          7.  **CRITICAL RULE for each prompt object:**
               -   \`scene_number\`, \`start_time_seconds\`, \`end_time_seconds\`: Calculate these based on an 8-second duration for each scene (e.g., scene 1 is 0-8s, scene 2 is 8-16s, etc.).
               -   \`prompt\`: This string MUST begin with "${videoStyle}". Then, for **ANY** character mentioned by name, you **MUST** include their detailed appearance from their character sheet to maintain consistency. This is followed by a description of the action, environment, lighting, and mood. The prompt string MUST end with "--ar 16:9".
-          7.  **Final JSON:** Populate all fields: 'characterSheet', 'storyScript', 'characters', and 'prompts'.
+          8.  **Final JSON:** Populate all fields: 'characterSheet', 'storyScript' (in English), 'characters', 'prompts', and 'storyScriptRomanUrdu'.
         `;
         break;
-    case 'fromTitle':
+    case 'fromTitle': {
+        const storyLengthToCharCount = {
+            'Short': 900,
+            'Medium': 2400,
+            'Long': 3600
+        };
+        const characterCount = storyLengthToCharCount[storyLength];
         schema = fromTitleSchema;
         masterPrompt = `
-            You are an expert prompt engineer and a creative storyteller.
+            You are an expert prompt engineer and a creative storyteller for kids.
             Your task is to generate content based on user input.
             The final output must be a JSON object matching the provided schema.
             Desired Video Style for any visual descriptions: ${videoStyle}
@@ -194,11 +209,13 @@ export async function generateStoryAndPrompts(
         
             1.  **Invent Characters:** Based on the story title, invent at least two compelling characters that fit the theme.
             2.  **Create Character Sheets:** Write a highly detailed, descriptive "Character Sheet" for **EACH** invented character. This sheet is crucial for visual consistency. Use specific keywords for an AI image generator. Break it down into logical categories (e.g., 'Face', 'Hair', 'Attire'). Combine all character sheets into a single markdown string under a main "Character Sheets" heading.
-            3.  **Write Story Script:** Write a ${storyLength}, compelling story based on the title and the characters you invented.
-            4.  **Generate Character Descriptions:** For each character you invented, create a separate JSON object containing their name and a detailed, self-contained, prompt-style description of their appearance. This description should be dense with visual keywords.
-            5.  **Final JSON:** Populate the 'characterSheet', 'storyScript', and 'characters' fields in the JSON output. Do NOT generate 'prompts'.
+            3.  **Write Story Script:** Write a compelling story in English based on the title and the characters you invented. **CRITICAL:** The story script must be approximately ${characterCount} characters long.
+            4.  **Translate Story:** Translate the entire English story script into Roman Urdu (using the English alphabet).
+            5.  **Generate Character Descriptions:** For each character you invented, create a separate JSON object containing their name and a detailed, self-contained, prompt-style description of their appearance. This description should be dense with visual keywords.
+            6.  **Final JSON:** Populate all fields: 'characterSheet', 'storyScript' (in English), 'characters', and 'storyScriptRomanUrdu'. Do NOT generate 'prompts'.
         `;
         break;
+    }
     case 'detail':
     default:
         schema = detailSchema;
@@ -387,84 +404,160 @@ export async function generateAudioFromScript(script: string, voiceName: string)
     }
 }
 
-export async function generateThumbnailPrompt(characterSheet: string, storyScript: string | undefined, videoStyle: string, storyTitle: string): Promise<string> {
+async function generateSimpleImagePrompt(characterSheet: string, storyScript: string | undefined, style: '3D Pixar-Style' | 'Realistic High-Quality Photo-Style'): Promise<string> {
     const prompt = `
-        You are an expert at creating viral YouTube thumbnails. Your task is to create a single, highly detailed, and visually captivating prompt for an AI image generator. The thumbnail should be **scroll-stopping**, **eye-catching**, and generate high click-through rates.
+        You are an expert YouTube Thumbnail Designer for Islamic Kids Stories.
+        Your task is to generate a single, high-CTR, kid-friendly image prompt for a thumbnail.
 
-        **Instructions for the Prompt:**
-        1.  **Style:** The prompt MUST begin with the specified style: "${videoStyle}".
-        2.  **Character Focus:** The thumbnail MUST feature the main character(s) prominently. Their faces should be clearly visible and expressive, conveying strong emotion (e.g., shock, joy, determination, fear). Use a close-up or medium shot. Incorporate their specific, detailed appearance from the character sheet for consistency.
-        3.  **High Drama & Intrigue:** Describe a compelling, action-packed, or emotionally charged moment from the story. Create a sense of mystery or conflict that makes the viewer want to know what happens next.
-        4.  **Vibrant & Dynamic Composition:** Use keywords for a dynamic and visually appealing composition. Emphasize vibrant colors, dramatic lighting (e.g., "god rays," "neon glow," "rim lighting"), and a clear focal point. Think "cinematic," "epic," "intense."
-        5.  **Title Integration (Optional but Recommended):** If a story title is provided, subtly hint at it visually. Do not write text on the image, but use elements that represent the title. For example, for 'The Last Dragon Rider', show a character with a dragon.
-        6.  **Clarity & Detail:** Be extremely descriptive about every element to leave no room for ambiguity for the AI.
-        7.  **Aspect Ratio:** The prompt MUST end with "--ar 16:9".
-        8.  **Output:** Your entire output should be ONLY the final image prompt text, with no extra explanations or labels.
+        **Style to Generate:** ${style}
 
-        **Character Sheet:**
+        **Key Rules & Requirements (Follow Strictly):**
+        - Create a bright, attractive, emotional, Islamic, and story-based visual.
+        - The main character MUST be the focus (big, centered, expressive).
+        - Add a strong facial expression (curiosity, happiness, surprise, learning moment, awe, kindness, etc.).
+        - The prompt must reflect the exact storyline of the script provided.
+        - Use storytelling elements, Islamic values, and emotional connection.
+        - The style should attract BOTH kids & parents.
+        - Do NOT add any text in the prompt description itself.
+        - The final prompt must end with "--ar 16:9".
+        - The prompt should describe a 5-7 year old Muslim kid (boy or girl depending on story) with modest & cultural clothing (Shalwar Kameez, Abaya, Hijab, Topi, Kurta, etc.).
+        - Use Islamic elements when suitable: Masjid, prayer mat, stars, moon, kindness scenes, morals, family scenes, Eid, dua, Quran, Islamic manners, etc.
+        - The output should be ONLY the prompt text, no explanations.
+
+        **Character Sheet (for consistency):**
         ---
         ${characterSheet}
         ---
 
-        ${storyTitle ? `
-        **Story Title:**
-        ---
-        ${storyTitle}
-        ---
-        ` : ''}
-
-        **Story Context:**
+        **Story Script:**
         ---
         ${storyScript || 'A story based on the character sheet.'}
         ---
 
-        **Viral Thumbnail Image Prompt:**
-    `;
+        **Image Prompt:**`;
 
-    try {
-        const response = await aiGlobal.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                safetySettings: safetySettings,
-            },
-        });
-
-        const thumbnailPrompt = response.text;
-        if (!thumbnailPrompt?.trim()) {
-            const blockReason = response.promptFeedback?.blockReason;
-            if (blockReason) {
-                throw new Error(`Thumbnail prompt generation was blocked due to ${blockReason}.`);
-            }
-            throw new Error("Failed to generate a thumbnail prompt.");
+    const response = await aiGlobal.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: { safetySettings },
+    });
+    const imagePrompt = response.text;
+    if (!imagePrompt?.trim()) {
+        const blockReason = response.promptFeedback?.blockReason;
+        if (blockReason) {
+            throw new Error(`Thumbnail prompt generation was blocked due to ${blockReason}.`);
         }
+        throw new Error("Failed to generate thumbnail prompt.");
+    }
+    return imagePrompt.trim();
+}
 
-        return thumbnailPrompt.trim();
+async function generateImage(prompt: string): Promise<string> {
+    const response = await aiGlobal.models.generateImages({
+        model: 'imagen-4.0-generate-001',
+        prompt: prompt,
+        config: {
+          numberOfImages: 1,
+          outputMimeType: 'image/jpeg',
+          aspectRatio: '16:9',
+        },
+    });
+    const base64ImageBytes = response.generatedImages[0].image.imageBytes;
+    if (!base64ImageBytes) {
+        throw new Error("The AI failed to generate a thumbnail image.");
+    }
+    return base64ImageBytes;
+}
+
+async function generateTitles(storyScript: string | undefined): Promise<string[]> {
+    const prompt = `
+        Based on the provided story script, generate exactly 3 short YouTube video title options suitable for Islamic kids stories (ages 4-10).
+
+        **Title Rules:**
+        - Short, simple, kid-friendly (max 55 characters).
+        - Add curiosity or a moral element.
+        - Should attract kids and parents.
+        - Examples: "Little Abdullah Learns to Share", "A Kindness Lesson at the Masjid", "The Lost Toy and a Beautiful Dua"
+        - The output should be a JSON array of 3 strings.
+
+        **Story Script:**
+        ---
+        ${storyScript || 'A story about kindness and faith.'}
+        ---
+
+        **Titles (JSON Array):**`;
+    
+    const response = await aiGlobal.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+            },
+            safetySettings,
+        },
+    });
+    const jsonText = response.text;
+    if (!jsonText?.trim()) {
+        const blockReason = response.promptFeedback?.blockReason;
+        if (blockReason) {
+            throw new Error(`Title generation was blocked due to ${blockReason}.`);
+        }
+        throw new Error("Failed to generate titles.");
+    }
+    return JSON.parse(jsonText.trim());
+}
+
+export async function generateThumbnailsAndTitles(characterSheet: string, storyScript: string | undefined): Promise<{ thumbnail3d: string; thumbnailRealistic: string; titles: string[] }> {
+    try {
+        const [prompt3d, promptRealistic, titles] = await Promise.all([
+            generateSimpleImagePrompt(characterSheet, storyScript, '3D Pixar-Style'),
+            generateSimpleImagePrompt(characterSheet, storyScript, 'Realistic High-Quality Photo-Style'),
+            generateTitles(storyScript)
+        ]);
+
+        const [image3d, imageRealistic] = await Promise.all([
+            generateImage(prompt3d),
+            generateImage(promptRealistic)
+        ]);
+
+        return {
+            thumbnail3d: image3d,
+            thumbnailRealistic: imageRealistic,
+            titles: titles
+        };
     } catch (error) {
-        throw handleApiError(error, 'thumbnail prompt generation');
+        throw handleApiError(error, 'thumbnail and title generation');
     }
 }
 
-export async function generateThumbnailImage(characterSheet: string, storyScript: string | undefined, videoStyle: string, storyTitle: string): Promise<string> {
-    try {
-        const prompt = await generateThumbnailPrompt(characterSheet, storyScript, videoStyle, storyTitle);
+export async function generateStandaloneThumbnail(userPrompt: string): Promise<string> {
+    const finalPrompt = `
+        High-quality YouTube thumbnail for a kids story, 3D Pixar Style, cinematic, vibrant colors, high detail, dramatic lighting, emotionally resonant.
+        Subject: ${userPrompt}.
+        Focus on a character's expressive face.
+        No text on the image.
+        --ar 16:9
+    `;
 
+    try {
         const response = await aiGlobal.models.generateImages({
             model: 'imagen-4.0-generate-001',
-            prompt: prompt,
+            prompt: finalPrompt,
             config: {
               numberOfImages: 1,
               outputMimeType: 'image/jpeg',
               aspectRatio: '16:9',
             },
         });
-
         const base64ImageBytes = response.generatedImages[0].image.imageBytes;
         if (!base64ImageBytes) {
-            throw new Error("The AI failed to generate a thumbnail image.");
+            throw new Error("The AI failed to generate a standalone thumbnail image.");
         }
         return base64ImageBytes;
     } catch (error) {
-        throw handleApiError(error, 'thumbnail image generation');
+        throw handleApiError(error, 'standalone thumbnail generation');
     }
 }

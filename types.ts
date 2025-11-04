@@ -18,10 +18,13 @@ export interface GeneratedCharacter {
 export interface GeneratedResult {
   characterSheet: string;
   storyScript?: string;
+  storyScriptRomanUrdu?: string;
   prompts?: ScenePrompt[];
   characters?: GeneratedCharacter[];
   voiceover?: string;
   voiceoverAudio?: string;
-  thumbnailPrompt?: string;
-  thumbnailImage?: string;
+  thumbnail3d?: string; // base64 string
+  thumbnailRealistic?: string; // base64 string
+  titles?: string[];
+  standaloneThumbnail?: string; // base64 string
 }
