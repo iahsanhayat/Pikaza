@@ -44,6 +44,37 @@ const renderMarkdown = (markdown: string) => {
     return <div dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+const PromptWithCopy: React.FC<{ prompt: string }> = ({ prompt }) => {
+    const [isCopied, setIsCopied] = useState(false);
+
+    useEffect(() => {
+        if (isCopied) {
+            const timer = setTimeout(() => setIsCopied(false), 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [isCopied]);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(prompt);
+        setIsCopied(true);
+    };
+
+    return (
+        <div className="mt-2 p-3 bg-dark-bg rounded-lg shadow-soft-inset relative group">
+            <p className="text-xs text-text-medium leading-relaxed font-mono whitespace-pre-wrap">{prompt}</p>
+            <button
+                onClick={handleCopy}
+                className="absolute top-2 right-2 p-1.5 rounded-full bg-dark-card shadow-soft-outset text-text-medium hover:text-accent transition opacity-0 group-hover:opacity-100"
+                aria-label="Copy prompt"
+                title="Copy prompt"
+            >
+                {isCopied ? <CheckIcon className="w-4 h-4 text-green-400" /> : <CopyIcon className="w-4 h-4" />}
+            </button>
+        </div>
+    );
+};
+
+
 const CharacterPrompt: React.FC<{ character: GeneratedCharacter }> = ({ character }) => {
     const [isCopied, setIsCopied] = useState(false);
 
@@ -150,7 +181,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
   const [isPromptsCopied, setIsPromptsCopied] = useState(false);
   
   const LoadingSpinnerIcon: React.FC = () => (
-    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
     </svg>
@@ -378,6 +409,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                                                 {result.thumbnail3d && (
                                                     <div className="space-y-2">
                                                         <img src={`data:image/jpeg;base64,${result.thumbnail3d}`} alt="3D Pixar Style Thumbnail" className="rounded-lg w-full shadow-lg" />
+                                                        {result.thumbnail3dPrompt && <PromptWithCopy prompt={result.thumbnail3dPrompt} />}
                                                         <button
                                                             type="button"
                                                             onClick={() => handleDownloadThumbnail(result.thumbnail3d, 'thumbnail_3d.jpeg')}
@@ -390,6 +422,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                                                 {result.thumbnailRealistic && (
                                                     <div className="space-y-2">
                                                         <img src={`data:image/jpeg;base64,${result.thumbnailRealistic}`} alt="Realistic Photo Style Thumbnail" className="rounded-lg w-full shadow-lg" />
+                                                        {result.thumbnailRealisticPrompt && <PromptWithCopy prompt={result.thumbnailRealisticPrompt} />}
                                                         <button
                                                             type="button"
                                                             onClick={() => handleDownloadThumbnail(result.thumbnailRealistic, 'thumbnail_realistic.jpeg')}
@@ -420,6 +453,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
                                     <h3 className="text-lg font-display font-bold text-accent mb-2">Standalone Thumbnail</h3>
                                     <div className="space-y-2">
                                         <img src={`data:image/jpeg;base64,${result.standaloneThumbnail}`} alt="Standalone Thumbnail" className="rounded-lg w-full shadow-lg" />
+                                        {result.standaloneThumbnailPrompt && <PromptWithCopy prompt={result.standaloneThumbnailPrompt} />}
                                         <button
                                             type="button"
                                             onClick={() => handleDownloadThumbnail(result.standaloneThumbnail, 'standalone_thumbnail.jpeg')}

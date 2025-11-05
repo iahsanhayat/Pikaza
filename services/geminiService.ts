@@ -510,7 +510,7 @@ async function generateTitles(storyScript: string | undefined): Promise<string[]
     return JSON.parse(jsonText.trim());
 }
 
-export async function generateThumbnailsAndTitles(characterSheet: string, storyScript: string | undefined): Promise<{ thumbnail3d: string; thumbnailRealistic: string; titles: string[] }> {
+export async function generateThumbnailsAndTitles(characterSheet: string, storyScript: string | undefined): Promise<{ thumbnail3d: string; thumbnailRealistic: string; titles: string[]; thumbnail3dPrompt: string; thumbnailRealisticPrompt: string; }> {
     try {
         const [prompt3d, promptRealistic, titles] = await Promise.all([
             generateSimpleImagePrompt(characterSheet, storyScript, '3D Pixar-Style'),
@@ -526,14 +526,16 @@ export async function generateThumbnailsAndTitles(characterSheet: string, storyS
         return {
             thumbnail3d: image3d,
             thumbnailRealistic: imageRealistic,
-            titles: titles
+            titles: titles,
+            thumbnail3dPrompt: prompt3d,
+            thumbnailRealisticPrompt: promptRealistic,
         };
     } catch (error) {
         throw handleApiError(error, 'thumbnail and title generation');
     }
 }
 
-export async function generateStandaloneThumbnail(userPrompt: string): Promise<string> {
+export async function generateStandaloneThumbnail(userPrompt: string): Promise<{ imageB64: string, prompt: string }> {
     const finalPrompt = `
         High-quality YouTube thumbnail for a kids story, 3D Pixar Style, cinematic, vibrant colors, high detail, dramatic lighting, emotionally resonant.
         Subject: ${userPrompt}.
@@ -556,7 +558,7 @@ export async function generateStandaloneThumbnail(userPrompt: string): Promise<s
         if (!base64ImageBytes) {
             throw new Error("The AI failed to generate a standalone thumbnail image.");
         }
-        return base64ImageBytes;
+        return { imageB64: base64ImageBytes, prompt: finalPrompt };
     } catch (error) {
         throw handleApiError(error, 'standalone thumbnail generation');
     }

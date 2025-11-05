@@ -153,11 +153,11 @@ const App: React.FC = () => {
     setIsThumbnailLoading(true);
     setError(null);
     try {
-      const { thumbnail3d, thumbnailRealistic, titles } = await generateThumbnailsAndTitles(
+      const thumbnailResult = await generateThumbnailsAndTitles(
         generatedResult.characterSheet, 
         generatedResult.storyScript
       );
-      setGeneratedResult(prev => prev ? { ...prev, thumbnail3d, thumbnailRealistic, titles } : null);
+      setGeneratedResult(prev => prev ? { ...prev, ...thumbnailResult } : null);
     } catch (e) {
         const errorMessage = e instanceof Error ? e.message : 'Please try again.';
         setError(`An error occurred while generating thumbnails and titles. ${errorMessage}`);
@@ -174,10 +174,11 @@ const App: React.FC = () => {
     setIsStandaloneThumbnailLoading(true);
     setError(null);
     try {
-        const imageB64 = await generateStandaloneThumbnail(thumbnailPrompt);
+        const { imageB64, prompt } = await generateStandaloneThumbnail(thumbnailPrompt);
         setGeneratedResult(prev => ({
             ...(prev || { characterSheet: '', storyScript: '', prompts: [] }),
-            standaloneThumbnail: imageB64
+            standaloneThumbnail: imageB64,
+            standaloneThumbnailPrompt: prompt
         }));
     } catch (e) {
         console.error(e);
