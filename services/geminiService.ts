@@ -68,7 +68,7 @@ export async function generateStoryAndPrompts(
         },
         storyScript: {
             type: Type.STRING,
-            description: "The full story script, written out as a narrative in English based on the provided title."
+            description: "The full story script, written out as a narrative in English, translated from the original Roman Urdu version."
         },
         characters: {
             type: Type.ARRAY,
@@ -84,7 +84,7 @@ export async function generateStoryAndPrompts(
         },
         storyScriptRomanUrdu: {
             type: Type.STRING,
-            description: "The full story script, translated into Roman Urdu."
+            description: "The full story script, originally written in Roman Urdu based on the provided title."
         }
     },
     required: ['characterSheet', 'storyScript', 'characters', 'storyScriptRomanUrdu']
@@ -124,7 +124,7 @@ export async function generateStoryAndPrompts(
         },
         storyScript: {
             type: Type.STRING,
-            description: "The full story script, written as a narrative in English based on the provided voiceover script."
+            description: "The full story script, written as a narrative in English, translated from the original Roman Urdu version."
         },
         characters: {
             type: Type.ARRAY,
@@ -154,7 +154,7 @@ export async function generateStoryAndPrompts(
         },
         storyScriptRomanUrdu: {
             type: Type.STRING,
-            description: "The full story script, translated into Roman Urdu."
+            description: "The full story script, originally written in Roman Urdu based on the provided voiceover script."
         }
     },
     required: ['characterSheet', 'storyScript', 'characters', 'prompts', 'storyScriptRomanUrdu']
@@ -169,7 +169,7 @@ export async function generateStoryAndPrompts(
     case 'fromVoiceover':
         schema = fromVoiceoverSchema;
         masterPrompt = `
-          You are an expert prompt engineer and a creative storyteller for kids. Your task is to generate content based on a provided voiceover script.
+          You are an expert prompt engineer and a creative storyteller for kids, specializing in Roman Urdu content. Your task is to generate content based on a provided voiceover script.
           The final output must be a JSON object matching the provided schema.
           Desired Video Style for any visual descriptions: ${videoStyle}
   
@@ -178,15 +178,15 @@ export async function generateStoryAndPrompts(
           - Number of Image Prompts to Generate: ${numPrompts}
   
           1.  **Analyze Script & Identify Characters:** Read the voiceover script carefully. Identify all characters that are mentioned more than one time.
-          2.  **Invent & Create Character Sheets:** For each identified character, invent a detailed visual appearance. Write a highly descriptive "Character Sheet" for **EACH** invented character. This sheet is crucial for visual consistency. Use specific keywords for an AI image generator. Combine all character sheets into a single markdown string under a main "Character Sheets" heading.
-          3.  **Write Story Script:** Based on the voiceover, write a full narrative story script in English that expands on the events. This story should logically flow and be divisible into ${numPrompts} scenes.
-          4.  **Translate Story:** Translate the entire English story script into Roman Urdu (using the English alphabet).
-          5.  **Generate Character Descriptions:** For each character you invented, create a separate JSON object containing their name and a detailed, self-contained, prompt-style description of their appearance.
-          6.  **Generate Video Prompts:** Break down the story into ${numPrompts} sequential scenes. For each scene, create a JSON prompt object.
+          2.  **Invent & Create Character Sheets:** For each identified character, invent a detailed visual appearance. Write a highly descriptive "Character Sheet" in **English** for **EACH** invented character. This is crucial for visual consistency for an AI image generator. Combine all character sheets into a single markdown string.
+          3.  **Write Story Script in Roman Urdu:** Based on the voiceover, write a full narrative story script in **Roman Urdu** that expands on the events. This is the primary story.
+          4.  **Translate Story to English:** Translate the entire Roman Urdu story script into English.
+          5.  **Generate Character Descriptions:** For each character you invented, create a separate JSON object in **English** containing their name and a detailed, self-contained, prompt-style description of their appearance.
+          6.  **Generate Video Prompts:** Break down the story into ${numPrompts} sequential scenes. For each scene, create a JSON prompt object. The prompts must be in **English**.
           7.  **CRITICAL RULE for each prompt object:**
               -   \`scene_number\`, \`start_time_seconds\`, \`end_time_seconds\`: Calculate these based on an 8-second duration for each scene (e.g., scene 1 is 0-8s, scene 2 is 8-16s, etc.).
               -   \`prompt\`: This string MUST begin with "${videoStyle}". Then, for **ANY** character mentioned by name, you **MUST** include their detailed appearance from their character sheet to maintain consistency. This is followed by a description of the action, environment, lighting, and mood. The prompt string MUST end with "--ar 16:9".
-          8.  **Final JSON:** Populate all fields: 'characterSheet', 'storyScript' (in English), 'characters', 'prompts', and 'storyScriptRomanUrdu'.
+          8.  **Final JSON:** Populate all fields: 'characterSheet', 'storyScript' (the English translation), 'characters', 'prompts', and 'storyScriptRomanUrdu' (the original Roman Urdu story).
         `;
         break;
     case 'fromTitle': {
@@ -198,7 +198,7 @@ export async function generateStoryAndPrompts(
         const characterCount = storyLengthToCharCount[storyLength];
         schema = fromTitleSchema;
         masterPrompt = `
-            You are an expert prompt engineer and a creative storyteller for kids.
+            You are an expert prompt engineer and a creative storyteller for kids, specializing in Roman Urdu content.
             Your task is to generate content based on user input.
             The final output must be a JSON object matching the provided schema.
             Desired Video Style for any visual descriptions: ${videoStyle}
@@ -208,11 +208,11 @@ export async function generateStoryAndPrompts(
             - Desired Story Length: ${storyLength}
         
             1.  **Invent Characters:** Based on the story title, invent at least two compelling characters that fit the theme.
-            2.  **Create Character Sheets:** Write a highly detailed, descriptive "Character Sheet" for **EACH** invented character. This sheet is crucial for visual consistency. Use specific keywords for an AI image generator. Break it down into logical categories (e.g., 'Face', 'Hair', 'Attire'). Combine all character sheets into a single markdown string under a main "Character Sheets" heading.
-            3.  **Write Story Script:** Write a compelling story in English based on the title and the characters you invented. **CRITICAL:** The story script must be approximately ${characterCount} characters long.
-            4.  **Translate Story:** Translate the entire English story script into Roman Urdu (using the English alphabet).
-            5.  **Generate Character Descriptions:** For each character you invented, create a separate JSON object containing their name and a detailed, self-contained, prompt-style description of their appearance. This description should be dense with visual keywords.
-            6.  **Final JSON:** Populate all fields: 'characterSheet', 'storyScript' (in English), 'characters', and 'storyScriptRomanUrdu'. Do NOT generate 'prompts'.
+            2.  **Create Character Sheets:** Write a highly detailed, descriptive "Character Sheet" in **English** for **EACH** invented character. This is crucial for visual consistency for an AI image generator. Combine all character sheets into a single markdown string.
+            3.  **Write Story Script in Roman Urdu:** Write a compelling story in **Roman Urdu** based on the title and the characters you invented. **CRITICAL:** The story script must be approximately ${characterCount} characters long. This is the primary story.
+            4.  **Translate Story to English:** Translate the entire Roman Urdu story script into English.
+            5.  **Generate Character Descriptions:** For each character you invented, create a separate JSON object in **English** containing their name and a detailed, self-contained, prompt-style description of their appearance.
+            6.  **Final JSON:** Populate all fields: 'characterSheet', 'storyScript' (the English translation), 'characters', and 'storyScriptRomanUrdu' (the original Roman Urdu story). Do NOT generate 'prompts'.
         `;
         break;
     }
@@ -284,8 +284,27 @@ export async function generateStoryAndPrompts(
   }
 }
 
-export async function generateVoiceoverScript(storyScript: string, targetCharacterCount: number): Promise<string> {
-  const prompt = `
+export async function generateVoiceoverScript(storyScript: string, targetCharacterCount: number, isUrdu: boolean): Promise<string> {
+  const prompt = isUrdu
+    ? `
+    You are a creative storyteller for children. Your task is to rewrite the following Roman Urdu story script into a captivating voiceover script in Roman Urdu for a kids' video.
+
+    **Instructions:**
+    1.  **Engaging Hook:** Start with a hook! Ask a question or present a mysterious statement in Roman Urdu to make kids curious and want to watch the whole video.
+    2.  **Simple Language:** Use simple, easy-to-understand Roman Urdu words that a young child can follow. Keep sentences short and clear.
+    3.  **Kid-Friendly Tone:** The tone should be friendly, warm, and exciting.
+    4.  **Character Limit:** **CRITICAL REQUIREMENT:** The final voiceover script MUST NOT exceed ${targetCharacterCount} characters. You must be concise.
+    5.  **Core Story:** Preserve the main events and feelings of the story.
+    6.  **Format:** Write it as a single, flowing paragraph in Roman Urdu ready for a voice actor to read. Do not include any headings or scene numbers.
+
+    **Original Roman Urdu Story:**
+    ---
+    ${storyScript}
+    ---
+
+    **Kids' Voiceover Script in Roman Urdu (MAX ${targetCharacterCount} characters):**
+  `
+    : `
     You are a creative storyteller for children. Your task is to rewrite the following story script into a captivating voiceover script for a kids' video.
 
     **Instructions:**

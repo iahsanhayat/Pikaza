@@ -82,13 +82,15 @@ const App: React.FC = () => {
   }, [characterProfiles, storyScene, storyTitle, voiceoverScriptInput, storyMode, videoLengthMinutes, videoStyle, storyLength]);
 
   const handleGenerateVoiceover = useCallback(async () => {
-    if (!generatedResult?.storyScript) return;
+    if (!generatedResult?.storyScript && !generatedResult?.storyScriptRomanUrdu) return;
 
     setIsVoiceoverLoading(true);
     setError(null);
     try {
         const targetCharacterCount = videoLengthMinutes * 1000;
-        const voiceover = await generateVoiceoverScript(generatedResult.storyScript, targetCharacterCount);
+        const scriptToUse = generatedResult.storyScriptRomanUrdu || generatedResult.storyScript || '';
+        const isUrdu = !!generatedResult.storyScriptRomanUrdu;
+        const voiceover = await generateVoiceoverScript(scriptToUse, targetCharacterCount, isUrdu);
         setGeneratedResult(prev => prev ? { ...prev, voiceover, voiceoverAudio: undefined } : null); // Reset audio when script changes
         setEditableVoiceoverScript(voiceover);
     } catch (e) {
