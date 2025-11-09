@@ -37,7 +37,6 @@ const App: React.FC = () => {
     setError(null);
     setGeneratedResult(null);
     setEditableVoiceoverScript('');
-    setIsVoiceoverUrdu(false); // Reset language flag
 
     if (storyMode === 'detail') {
         if (!characterProfiles.some(c => c.appearance.trim()) || !storyScene.trim()) {
@@ -76,6 +75,7 @@ const App: React.FC = () => {
         storyLength,
       });
       setGeneratedResult(result);
+      setIsVoiceoverUrdu(!!result.storyScriptRomanUrdu);
     } catch (e) {
       console.error(e);
       const errorMessage = e instanceof Error ? e.message : 'An error occurred while generating the content. Please try again.';
@@ -94,7 +94,6 @@ const App: React.FC = () => {
         const targetCharacterCount = videoLengthMinutes * 1000;
         const scriptToUse = generatedResult.storyScriptRomanUrdu || generatedResult.storyScript || '';
         const isUrdu = !!generatedResult.storyScriptRomanUrdu;
-        setIsVoiceoverUrdu(isUrdu);
         const voiceover = await generateVoiceoverScript(scriptToUse, targetCharacterCount, isUrdu);
         setGeneratedResult(prev => prev ? { ...prev, voiceover, voiceoverAudio: undefined } : null); // Reset audio when script changes
         setEditableVoiceoverScript(voiceover);
