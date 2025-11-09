@@ -1,8 +1,9 @@
+
 import React, { useState, useCallback } from 'react';
 import type { GeneratedResult, CharacterProfile } from './types';
 import { CharacterInputForm } from './components/CharacterInputForm';
 import { PromptDisplay } from './components/PromptDisplay';
-import { generateStoryAndPrompts, generateVoiceoverScript, generateAudioFromScript, enhanceVoiceoverScript, generateThumbnailsAndTitles, generateStandaloneThumbnail } from './services/geminiService';
+import { generateStoryAndPrompts, generateVoiceoverScript, generateAudioFromScript, enhanceVoiceoverScript, generateThumbnailsAndTitles, generateStandaloneThumbnail, translateScriptToEnglish } from './services/geminiService';
 
 const App: React.FC = () => {
   const [characterProfiles, setCharacterProfiles] = useState<CharacterProfile[]>([{
@@ -27,6 +28,8 @@ const App: React.FC = () => {
   const [isAudioLoading, setIsAudioLoading] = useState<boolean>(false);
   const [isThumbnailLoading, setIsThumbnailLoading] = useState<boolean>(false);
   const [isStandaloneThumbnailLoading, setIsStandaloneThumbnailLoading] = useState<boolean>(false);
+  const [isVoiceoverUrdu, setIsVoiceoverUrdu] = useState<boolean>(false);
+  const [isTranslating, setIsTranslating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = useCallback(async () => {
@@ -34,6 +37,7 @@ const App: React.FC = () => {
     setError(null);
     setGeneratedResult(null);
     setEditableVoiceoverScript('');
+    setIsVoiceoverUrdu(false); // Reset language flag
 
     if (storyMode === 'detail') {
         if (!characterProfiles.some(c => c.appearance.trim()) || !storyScene.trim()) {
@@ -90,6 +94,7 @@ const App: React.FC = () => {
         const targetCharacterCount = videoLengthMinutes * 1000;
         const scriptToUse = generatedResult.storyScriptRomanUrdu || generatedResult.storyScript || '';
         const isUrdu = !!generatedResult.storyScriptRomanUrdu;
+        setIsVoiceoverUrdu(isUrdu);
         const voiceover = await generateVoiceoverScript(scriptToUse, targetCharacterCount, isUrdu);
         setGeneratedResult(prev => prev ? { ...prev, voiceover, voiceoverAudio: undefined } : null); // Reset audio when script changes
         setEditableVoiceoverScript(voiceover);
@@ -125,7 +130,13 @@ const App: React.FC = () => {
     setIsAudioLoading(true);
     setError(null);
     try {
-      const audioB64 = await generateAudioFromScript(editableVoiceoverScript, selectedVoice);
+        let scriptForAudio = editableVoiceoverScript;
+        if (isVoiceoverUrdu) {
+            setIsTranslating(true);
+            scriptForAudio = await translateScriptToEnglish(editableVoiceoverScript);
+            setIsTranslating(false);
+        }
+      const audioB64 = await generateAudioFromScript(scriptForAudio, selectedVoice);
       setGeneratedResult(prev => {
           // If a previous result exists, update it
           if (prev) {
@@ -146,8 +157,9 @@ const App: React.FC = () => {
       setError(errorMessage);
     } finally {
       setIsAudioLoading(false);
+      setIsTranslating(false);
     }
-  }, [editableVoiceoverScript, selectedVoice]);
+  }, [editableVoiceoverScript, selectedVoice, isVoiceoverUrdu]);
 
   const handleGenerateThumbnail = useCallback(async () => {
     if (!generatedResult?.characterSheet) return;
@@ -229,6 +241,7 @@ const App: React.FC = () => {
           // FIX: Pass the correct handler function to the onGenerateAudio prop.
           onGenerateAudio={handleGenerateAudio}
           isAudioLoading={isAudioLoading}
+          isTranslating={isTranslating}
           editableVoiceoverScript={editableVoiceoverScript}
           setEditableVoiceoverScript={setEditableVoiceoverScript}
           voiceoverScriptInput={voiceoverScriptInput}

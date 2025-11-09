@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse, HarmCategory, HarmBlockThreshold, Modality } from "@google/genai";
 import type { CharacterProfile, GeneratedResult } from '../types';
 
@@ -390,6 +391,41 @@ export async function enhanceVoiceoverScript(script: string): Promise<string> {
     throw handleApiError(error, 'script enhancement');
   }
 }
+
+export async function translateScriptToEnglish(script: string): Promise<string> {
+    const prompt = `
+        You are an expert translator. Your task is to translate the following text from Roman Urdu to natural, fluent English.
+        - Preserve the tone and intent of the original text.
+        - If the text already appears to be in English, return it as-is without any changes or additional text.
+        - Your output should ONLY be the translated English text.
+
+        **Text to Translate:**
+        ---
+        ${script}
+        ---
+
+        **English Translation:**
+    `;
+    try {
+        const response = await aiGlobal.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { safetySettings },
+        });
+        const translatedText = response.text;
+        if (!translatedText?.trim()) {
+            const blockReason = response.promptFeedback?.blockReason;
+            if (blockReason) {
+                throw new Error(`Translation was blocked due to ${blockReason}.`);
+            }
+            throw new Error("Translation resulted in an empty string.");
+        }
+        return translatedText.trim();
+    } catch (error) {
+        throw handleApiError(error, 'script translation');
+    }
+}
+
 
 export async function generateAudioFromScript(script: string, voiceName: string): Promise<string> {
     try {

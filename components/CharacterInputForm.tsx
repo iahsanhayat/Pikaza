@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import type { CharacterProfile, GeneratedResult } from '../types';
 import { LoadingSpinnerIcon, MicIcon, PlayIcon, PauseIcon, DownloadIcon, SparklesIcon, TrashIcon, PhotoIcon } from './icons';
@@ -29,6 +30,7 @@ interface CharacterInputFormProps {
   setSelectedVoice: React.Dispatch<React.SetStateAction<string>>;
   onGenerateAudio: () => void;
   isAudioLoading: boolean;
+  isTranslating: boolean;
   editableVoiceoverScript: string;
   setEditableVoiceoverScript: React.Dispatch<React.SetStateAction<string>>;
   voiceoverScriptInput: string;
@@ -203,6 +205,7 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
   setSelectedVoice,
   onGenerateAudio,
   isAudioLoading,
+  isTranslating,
   editableVoiceoverScript,
   setEditableVoiceoverScript,
   voiceoverScriptInput,
@@ -608,7 +611,7 @@ export const CharacterInputForm: React.FC<CharacterInputFormProps> = ({
                                     className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl text-sm font-semibold text-text-light bg-dark-input shadow-soft-outset hover:text-accent focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition"
                                 >
                                     {isAudioLoading ? (
-                                        <><LoadingSpinnerIcon /> Generating Audio...</>
+                                        <><LoadingSpinnerIcon /> {isTranslating ? 'Translating...' : 'Generating Audio...'}</>
                                     ) : (
                                         <><MicIcon className="w-4 h-4" /> Generate Full Audio</>
                                     )}
