@@ -217,7 +217,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
 
   const handleCopyAllPrompts = () => {
     if (result?.prompts) {
-      const allPrompts = result.prompts.map(p => p.prompt).join('\n\n');
+      const allPrompts = result.prompts.map(p => p.prompt).join('\n');
       navigator.clipboard.writeText(allPrompts);
       setIsPromptsCopied(true);
     }
