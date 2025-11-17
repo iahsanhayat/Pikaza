@@ -217,7 +217,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
 
   const handleCopyAllPrompts = () => {
     if (result?.prompts) {
-      const allPrompts = result.prompts.map(p => p.prompt).join('\n');
+      const allPrompts = result.prompts.map(p => p.prompt).join('\n\n');
       navigator.clipboard.writeText(allPrompts);
       setIsPromptsCopied(true);
     }
@@ -255,7 +255,7 @@ export const PromptDisplay: React.FC<PromptDisplayProps> = ({ result, isLoading,
     if (result?.prompts) {
       const promptsText = result.prompts
         .map((p) => `${p.scene_number}. ${p.prompt}`)
-        .join('\n');
+        .join('\n\n');
       const blob = new Blob([promptsText], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
